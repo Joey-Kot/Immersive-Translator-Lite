@@ -65,7 +65,11 @@
 
 ## 2. 安装方式
 
-### 2.1 Chrome 扩展安装（开发者模式）
+### 2.1 Chrome Web Store 安装（推荐）
+
+- 商店地址：<https://chromewebstore.google.com/detail/immersive-translator-lite/mohbgokiimlhljckgcgidegkalglnlek>
+
+### 2.2 Chrome 扩展安装（开发者模式）
 
 1. 打开 `chrome://extensions`。
 2. 右上角开启“开发者模式（Developer mode）”。
@@ -75,7 +79,7 @@
 
 说明：扩展设置页已按 `System / Language / API / Request / Hotkey / Debug` 分组，便于快速定位配置项。
 
-### 2.2 UserScript 安装
+### 2.3 UserScript 安装
 
 支持任何兼容 UserScript 的扩展，常见包括：
 
@@ -92,7 +96,7 @@
 4. 配置 API 参数并启用脚本。
 5. 刷新目标网页。
 
-### 2.3 匹配范围
+### 2.4 匹配范围
 
 默认是全站匹配：
 
@@ -165,6 +169,7 @@ const CONFIG = {
 - `notifyOnDuplicateSelection`：重复选中同一正在翻译块时是否提示。
 - `requestTimeoutMs`：单次请求超时毫秒。
 - `maxSegmentsPerRequest`：单次请求最多携带的段数，超限会自动分批。
+- `maxRequestRetries`：单个请求失败后的最大重试次数（默认 `3`）。仅对可恢复错误触发指数退避重试（如超时、`429`、`5xx`、解析失败、`Segment length mismatch` 等）。
 - `requestCacheEnabled`：是否启用请求结果缓存。
 - `requestCacheTimeoutHours`：请求缓存过期时间（小时）。
 - 选项页支持 `Clean Request Cache / 清空请求缓存`，用于主动失效全部缓存。
@@ -210,6 +215,7 @@ const CONFIG = {
 - 检查 `apiBaseUrl` 是否可达。
 - 检查模型名与接口权限。
 - 打开控制台查看具体错误体。
+- `400/401/403/404` 默认不会重试；`429/5xx` 会按 `maxRequestRetries` 进行指数退避重试。
 
 ### 5.4 译文结构异常
 

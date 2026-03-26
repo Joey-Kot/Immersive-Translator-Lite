@@ -113,6 +113,7 @@ const DEFAULT_CONFIG_BASE = {
   reasoningSummary: 'auto',
   outputFormat: 'json_schema',
   maxSegmentsPerRequest: 50,
+  maxRequestRetries: 3,
   structuredOutputAutoFallback: true,
   requestCacheEnabled: true,
   requestCacheTimeoutHours: 24,
@@ -169,6 +170,7 @@ const FIELD_TYPES = {
   reasoningSummary: 'string',
   outputFormat: 'string',
   maxSegmentsPerRequest: 'number',
+  maxRequestRetries: 'number',
   structuredOutputAutoFallback: 'boolean',
   requestCacheEnabled: 'boolean',
   requestCacheTimeoutHours: 'number',
@@ -250,6 +252,7 @@ const I18N_TEXT = {
       maxOutputTokens: '最大输出 Token 数',
       requestTimeoutMs: '请求超时时间（毫秒）',
       maxSegmentsPerRequest: '单次请求最大分段数',
+      maxRequestRetries: '最大请求重试次数',
       requestCacheEnabled: '请求缓存',
       requestCacheTimeoutHours: '请求缓存超时（小时）',
       cleanRequestCache: '清空请求缓存',
@@ -384,6 +387,7 @@ const I18N_TEXT = {
       maxOutputTokens: 'Max Output Tokens',
       requestTimeoutMs: 'Request Timeout (ms)',
       maxSegmentsPerRequest: 'Max Segments Per Request',
+      maxRequestRetries: 'Maximum Request Retries',
       requestCacheEnabled: 'Request Cache',
       requestCacheTimeoutHours: 'Request Cache Timeout (hours)',
       cleanRequestCache: 'Clean Request Cache',
@@ -513,6 +517,12 @@ function normalizeSettings(input) {
     result.translationConfig.requestCacheTimeoutHours <= 0
   ) {
     result.translationConfig.requestCacheTimeoutHours = defaults.requestCacheTimeoutHours;
+  }
+  if (
+    !Number.isInteger(result.translationConfig.maxRequestRetries) ||
+    result.translationConfig.maxRequestRetries < 0
+  ) {
+    result.translationConfig.maxRequestRetries = defaults.maxRequestRetries;
   }
 
   return result;

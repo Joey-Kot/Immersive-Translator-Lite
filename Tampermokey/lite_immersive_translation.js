@@ -68,6 +68,8 @@
     outputFormat: 'json_schema',
     // 单次请求最多携带的 seg 数量，超过会拆分为多个请求并发执行
     maxSegmentsPerRequest: 50,
+    // 单个请求失败后的最大重试次数（指数退避）
+    maxRequestRetries: 3,
     // 当端点不支持结构化输出时，是否自动降级重试一次
     structuredOutputAutoFallback: true,
     // 键盘快捷键，用于开启/关闭选择模式，另：ESC 键是退出选择模式
@@ -207,8 +209,11 @@
   const DEFAULT_REASONING_SUMMARY = 'auto';
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
   const DEFAULT_MAX_SEGMENTS_PER_REQUEST = 50;
+  const DEFAULT_MAX_REQUEST_RETRIES = 3;
   const DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK = true;
   const DEFAULT_HOTKEY = 'Alt+KeyA';
+  const RETRY_BASE_DELAY_MS = 500;
+  const RETRY_MAX_DELAY_MS = 5000;
 
   // 跳过这些标签的提取和翻译
   const SKIP_TAGS = new Set([
@@ -848,6 +853,14 @@
     return DEFAULT_MAX_SEGMENTS_PER_REQUEST;
   }
 
+  function resolveMaxRequestRetries() {
+    const raw = Number(CONFIG.maxRequestRetries);
+    if (Number.isInteger(raw) && raw >= 0) {
+      return raw;
+    }
+    return DEFAULT_MAX_REQUEST_RETRIES;
+  }
+
   function splitIntoBatches(segments, batchSize) {
     const chunks = [];
     for (let i = 0; i < segments.length; i += batchSize) {
@@ -1110,6 +1123,7 @@
     if (!sourceSegments.length) return [];
 
     const maxPerRequest = resolveMaxSegmentsPerRequest();
+    const maxRequestRetries = resolveMaxRequestRetries();
     const chunkedSegments = splitIntoBatches(sourceSegments, maxPerRequest);
     const requestLabel = opts.requestLabel || 'translation';
     const batchSizes = chunkedSegments.map((chunk) => chunk.length).join('+');
@@ -1132,8 +1146,21 @@
           ...payload,
           segments: chunk
         };
-        const translatedChunk = await translateSegmentsOnce(chunkPayload, opts);
-        const validatedChunk = validateTranslationResult(chunk, translatedChunk);
+        const validatedChunk = await withRetry(
+          async () => {
+            const translatedChunk = await translateSegmentsOnce(chunkPayload, opts);
+            return validateTranslationResult(chunk, translatedChunk);
+          },
+          {
+            maxRetries: maxRequestRetries,
+            shouldRetry: isRetryableTranslationError,
+            onRetry: ({ attempt, nextAttempt, delayMs, error }) => {
+              console.warn(
+                `[LocalBlockTranslator] ${requestLabel} chunk ${index + 1}/${chunkedSegments.length} attempt ${attempt} failed: ${getErrorMessage(error)}; retry ${nextAttempt}/${maxRequestRetries + 1} in ${delayMs}ms.`
+              );
+            }
+          }
+        );
         logInfoIf(
           shouldLogBatching,
           `[LocalBlockTranslator] ${requestLabel} chunk ${index + 1}/${chunkedSegments.length} validated (${validatedChunk.length} segments).`
@@ -1479,6 +1506,83 @@
     const fallbackBody = { ...requestBody };
     delete fallbackBody.text;
     return fallbackBody;
+  }
+
+  function isRetryableTranslationError(error) {
+    if (isApiKeyMissingError(error)) return false;
+
+    const statusCode = extractApiHttpStatus(error);
+    if (statusCode !== null) {
+      if ([400, 401, 403, 404].includes(statusCode)) return false;
+      if (statusCode === 429 || statusCode >= 500) return true;
+    }
+
+    if (error && typeof error === 'object' && error.name === 'AbortError') {
+      return true;
+    }
+
+    const message = getErrorMessage(error).toLowerCase();
+    if (!message) return false;
+
+    if (message.includes('segment length mismatch')) return true;
+    if (message.includes('failed to parse translation json array')) return true;
+    if (message.includes('invalid structured output')) return true;
+    if (message.includes('failed to fetch')) return true;
+    if (message.includes('networkerror') || message.includes('network error')) return true;
+    if (message.includes('timeout')) return true;
+
+    return false;
+  }
+
+  function isApiKeyMissingError(error) {
+    const message = getErrorMessage(error);
+    return message.includes('CONFIG.apiKey is empty');
+  }
+
+  function extractApiHttpStatus(error) {
+    const message = getErrorMessage(error);
+    const match = message.match(/api http\s+(\d{3})/i);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
+  function resolveRetryDelayMs(attempt) {
+    const baseDelay = Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1), RETRY_MAX_DELAY_MS);
+    const jitterFactor = 0.8 + Math.random() * 0.4;
+    return Math.max(0, Math.round(baseDelay * jitterFactor));
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  async function withRetry(operation, options) {
+    const opts = options || {};
+    const maxRetries = Number.isInteger(opts.maxRetries) && opts.maxRetries >= 0 ? opts.maxRetries : 0;
+    const shouldRetry = typeof opts.shouldRetry === 'function' ? opts.shouldRetry : () => false;
+    const onRetry = typeof opts.onRetry === 'function' ? opts.onRetry : null;
+
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        const retryable = shouldRetry(error);
+        const canRetry = retryable && attempt <= maxRetries;
+        if (!canRetry) {
+          throw error;
+        }
+
+        const nextAttempt = attempt + 1;
+        const delayMs = resolveRetryDelayMs(attempt);
+        if (onRetry) {
+          onRetry({ attempt, nextAttempt, delayMs, error });
+        }
+        await sleep(delayMs);
+      }
+    }
   }
 
   function extractResponsesOutputText(json) {

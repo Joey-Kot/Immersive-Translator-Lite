@@ -168,13 +168,14 @@
                 <input id="maxSegmentsPerRequest" type="number" step="1" />
               </label>
 
-              <label class="field switch-field">
-                <span class="label">结构化输出自动降级</span>
-                <span class="switch-wrap">
-                  <input id="structuredOutputAutoFallback" type="checkbox" />
-                  <span class="switch"></span>
-                  <span class="switch-text">结构化输出失败时自动降级一次</span>
-                </span>
+              <label class="field">
+                <span class="label">最大请求重试次数</span>
+                <input id="maxRequestRetries" type="number" step="1" min="0" />
+              </label>
+
+              <label class="field">
+                <span class="label">请求缓存超时（小时）</span>
+                <input id="requestCacheTimeoutHours" type="number" step="1" min="1" />
               </label>
 
               <label class="field switch-field">
@@ -186,9 +187,13 @@
                 </span>
               </label>
 
-              <label class="field">
-                <span class="label">请求缓存超时（小时）</span>
-                <input id="requestCacheTimeoutHours" type="number" step="1" min="1" />
+              <label class="field switch-field">
+                <span class="label">结构化输出自动降级</span>
+                <span class="switch-wrap">
+                  <input id="structuredOutputAutoFallback" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">结构化输出失败时自动降级一次</span>
+                </span>
               </label>
 
               <label class="field">
