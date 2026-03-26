@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>沉浸式翻译设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="page">
+      <div class="page-shell">
+        <header class="page-header">
+          <h1 id="pageTitle">沉浸式翻译设置</h1>
+          <p id="pageSubtitle" class="subtitle">配置将通过 chrome.storage.sync 保存，并应用到所有 frame。</p>
+        </header>
+
+        <div class="group-list">
+          <section class="group-card" aria-labelledby="groupTitleSystem">
+            <h2 id="groupTitleSystem" class="group-title">System Settings</h2>
+            <div class="grid two-col">
+              <label class="field switch-field">
+                <span class="label">插件开关</span>
+                <span class="switch-wrap">
+                  <input id="enabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">启用翻译插件</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">在 iframe 中生效</span>
+                <span class="switch-wrap">
+                  <input id="injectIntoIframes" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">允许在所有注入 frame 中运行</span>
+                </span>
+              </label>
+
+              <label class="field">
+                <span class="label">主题</span>
+                <select id="uiTheme">
+                  <option value="system">跟随系统</option>
+                  <option value="light">浅色模式</option>
+                  <option value="dark">夜间模式</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="group-card" aria-labelledby="groupTitleLanguage">
+            <h2 id="groupTitleLanguage" class="group-title">Language Settings</h2>
+            <div class="grid two-col">
+              <label class="field">
+                <span class="label">源语言</span>
+                <input id="sourceLang" type="text" />
+              </label>
+
+              <label class="field">
+                <span class="label">目标语言</span>
+                <input id="targetLang" type="text" />
+              </label>
+            </div>
+          </section>
+
+          <section class="group-card" aria-labelledby="groupTitleApi">
+            <h2 id="groupTitleApi" class="group-title">API Settings</h2>
+            <div class="grid two-col">
+              <label class="field">
+                <span class="label">API 端点地址</span>
+                <input id="apiBaseUrl" type="text" placeholder="https://api.example.com/v1" />
+              </label>
+
+              <label class="field password-field">
+                <span class="label">访问令牌</span>
+                <div class="password-row">
+                  <input id="apiKey" type="password" placeholder="sk-..." />
+                  <button id="toggleApiKey" type="button" class="ghost">显示</button>
+                </div>
+              </label>
+
+              <label class="field">
+                <span class="label">模型名称</span>
+                <input id="model" type="text" />
+              </label>
+
+              <div class="field field-spacer" aria-hidden="true"></div>
+
+              <label class="field">
+                <span class="label">最大输出 Token 数</span>
+                <input id="maxOutputTokens" type="number" step="1" />
+              </label>
+
+              <label class="field">
+                <span class="label">采样温度</span>
+                <input id="temperature" type="number" step="0.1" />
+              </label>
+
+              <label class="field">
+                <span class="label">推理强度</span>
+                <select id="reasoningEffort">
+                  <option value="none">none（关闭）</option>
+                  <option value="minimal">minimal（极低）</option>
+                  <option value="low">low（低）</option>
+                  <option value="medium">medium（中）</option>
+                  <option value="high">high（高）</option>
+                  <option value="xhigh">xhigh（极高）</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="label">推理摘要级别</span>
+                <select id="reasoningSummary">
+                  <option value="auto">auto（自动）</option>
+                  <option value="concise">concise（简略）</option>
+                  <option value="detailed">detailed（详细）</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="label">输出格式</span>
+                <select id="outputFormat">
+                  <option value="json_schema">结构化 JSON（推荐）</option>
+                  <option value="none">不限制（纯文本）</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="label">缓存保留时长</span>
+                <select id="promptCacheRetention">
+                  <option value="in_memory">in_memory</option>
+                  <option value="24h">24h</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="label">提示词缓存键（普通模式）</span>
+                <div class="password-row">
+                  <input id="promptCacheKey" type="text" />
+                  <button id="generatePromptCacheKey" type="button" class="ghost">生成</button>
+                </div>
+              </label>
+
+              <label class="field">
+                <span class="label">提示词缓存键（占位符模式）</span>
+                <div class="password-row">
+                  <input id="promptCacheKeyPlaceholder" type="text" />
+                  <button id="generatePromptCacheKeyPlaceholder" type="button" class="ghost">生成</button>
+                </div>
+              </label>
+
+              <label class="field full">
+                <span class="label">额外系统指令</span>
+                <textarea id="responseInstructions" rows="7"></textarea>
+              </label>
+            </div>
+          </section>
+
+          <section class="group-card" aria-labelledby="groupTitleRequest">
+            <h2 id="groupTitleRequest" class="group-title">Request Settings</h2>
+            <div class="grid two-col">
+              <label class="field">
+                <span class="label">请求超时时间（毫秒）</span>
+                <input id="requestTimeoutMs" type="number" step="100" />
+              </label>
+
+              <label class="field">
+                <span class="label">单次请求最大分段数</span>
+                <input id="maxSegmentsPerRequest" type="number" step="1" />
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">结构化输出自动降级</span>
+                <span class="switch-wrap">
+                  <input id="structuredOutputAutoFallback" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">结构化输出失败时自动降级一次</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">请求缓存</span>
+                <span class="switch-wrap">
+                  <input id="requestCacheEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">开启请求结果缓存</span>
+                </span>
+              </label>
+
+              <label class="field">
+                <span class="label">请求缓存超时（小时）</span>
+                <input id="requestCacheTimeoutHours" type="number" step="1" min="1" />
+              </label>
+
+              <label class="field">
+                <span class="label">清空请求缓存</span>
+                <button id="cleanRequestCache" type="button" class="success-soft">清空缓存</button>
+              </label>
+            </div>
+          </section>
+
+          <section class="group-card" aria-labelledby="groupTitleHotkey">
+            <h2 id="groupTitleHotkey" class="group-title">Hotkey Settings</h2>
+            <div class="grid two-col">
+              <label class="field">
+                <span class="label">选择模式</span>
+                <select id="selectionMode">
+                  <option value="sticky">sticky (连续选择)</option>
+                  <option value="manual">manual (单次退出)</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="label">开始/结束选择快捷键</span>
+                <input id="hotkey" type="text" />
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">多选模式</span>
+                <span class="switch-wrap">
+                  <input id="multipleSelectionMode" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">按住多选键可连续选择多个 DOM 块</span>
+                </span>
+              </label>
+
+              <label class="field">
+                <span class="label">多选模式按键</span>
+                <select id="multipleSelectionModeHotkey">
+                  <option value="Alt">Alt</option>
+                  <option value="Ctrl">Ctrl</option>
+                  <option value="Shift">Shift</option>
+                  <option value="Meta">Meta</option>
+                </select>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">多选合并请求</span>
+                <span class="switch-wrap">
+                  <input id="multipleSelectionMergeRequest" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">松开多选键后将已选块合并翻译请求</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">重复选择提醒</span>
+                <span class="switch-wrap">
+                  <input id="notifyOnDuplicateSelection" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">重复选中时提示</span>
+                </span>
+              </label>
+
+              <label class="field switch-field" data-touch-setting="true">
+                <span class="label">触控快捷操作</span>
+                <span class="switch-wrap">
+                  <input id="enableTouchShortcuts" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">双击进入、三指取消</span>
+                </span>
+              </label>
+
+              <label class="field switch-field" data-touch-setting="true">
+                <span class="label">三指取消</span>
+                <span class="switch-wrap">
+                  <input id="threeFingerCancelEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">三指触控取消选择模式</span>
+                </span>
+              </label>
+
+              <label class="field" data-touch-setting="true">
+                <span class="label">双击最大间隔（毫秒）</span>
+                <input id="doubleTapMaxDelayMs" type="number" step="1" />
+              </label>
+
+              <label class="field" data-touch-setting="true">
+                <span class="label">双击最大位移（像素）</span>
+                <input id="doubleTapMaxMovePx" type="number" step="1" />
+              </label>
+
+            </div>
+          </section>
+
+          <section class="group-card" aria-labelledby="groupTitleDebug">
+            <h2 id="groupTitleDebug" class="group-title">Debug Settings</h2>
+            <div class="grid two-col">
+              <label class="field switch-field">
+                <span class="label">显示调试按钮</span>
+                <span class="switch-wrap">
+                  <input id="showLauncher" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">显示页面调试启动按钮</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">热键调试日志</span>
+                <span class="switch-wrap">
+                  <input id="debugHotkey" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">输出热键调试日志</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">流程调试日志</span>
+                <span class="switch-wrap">
+                  <input id="debugProcessLog" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">输出分批/校验流程调试日志</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">重排调试日志</span>
+                <span class="switch-wrap">
+                  <input id="debugReorder" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">输出重排翻译调试日志</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">Request Log</span>
+                <span class="switch-wrap">
+                  <input id="debugRequestLog" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">输出完整请求体 JSON 到控制台</span>
+                </span>
+              </label>
+
+              <label class="field switch-field">
+                <span class="label">Response Log</span>
+                <span class="switch-wrap">
+                  <input id="debugResponseLog" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">输出完整返回值 JSON 到控制台</span>
+                </span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div class="actions">
+          <button id="saveBtn" type="button" class="primary">保存设置</button>
+          <button id="resetBtn" type="button" class="danger">Reset Settings</button>
+          <span id="status" class="status"></span>
+        </div>
+      </div>
+    </main>
+
+    <div id="confirmOverlay" class="confirm-overlay hidden" aria-hidden="true">
+      <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <h2 id="confirmTitle" class="confirm-title">确认操作</h2>
+        <p id="confirmMessage" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirmCancelBtn" type="button" class="ghost">取消</button>
+          <button id="confirmOkBtn" type="button" class="danger">确认重置</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
