@@ -2,7 +2,6 @@
 (function () {
   'use strict';
   const SCRIPT_VERSION = '1.0.1';
-  const SETTINGS_SCHEMA_VERSION = 1;
   const IS_TOP_FRAME = window.top === window;
   const MESSAGE_TYPES = {
     TOGGLE_SELECTION_MODE: 'TOGGLE_SELECTION_MODE',
@@ -39,98 +38,10 @@
    * @property {TaskStatus} status
    */
 
-  const DEFAULT_CONFIG = {
-    // API 模式，responses 使用 /responses，chat_completions/deepseek 使用 /chat/completions，gemini 使用 generateContent
-    apiMode: 'responses',
-    // API 服务地址，末尾可带或不带 /v1，脚本会自动拼接对应路径
-    apiBaseUrl: 'https://api.example.com/v1',
-    // API 密钥（Bearer Token），留空会在请求前直接报错
-    apiKey: 'sk-xxx',
-    // 使用的模型名称，例如 gpt-5.1 / gpt-5.2 等
-    model: 'gpt-5.1',
-    // 源语言，'Any Language' 表示自动识别，也可写具体语言名
-    sourceLang: 'Any Language',
-    // 目标语言，翻译结果会输出为该语言
-    targetLang: 'Chinese Simplified',
-    // 额外系统指令，留空则使用内置默认翻译规则
-    responseInstructions: '',
-    // Gemini 模式下是否缓存 System Instructions
-    geminiCacheEnabled: true,
-    // DeepSeek 模式下是否启用 thinking
-    deepSeekThinkingEnabled: true,
-    // Prompt Cache 的缓存键，相同键可提升重复请求命中率
-    promptCacheKey: '188f6fd3-49ea-4f63-ae50-b87cf9574a1a',
-    // 占位符重排翻译专用的 Prompt Cache 缓存键
-    promptCacheKeyPlaceholder: '111acfce-6ac6-4373-bdcb-61455403f3af',
-    // Prompt Cache 保留时长，例如 24h
-    promptCacheRetention: '24h',
-    // 推理强度，控制模型思考深度（如 none/low/medium/high）
-    reasoningEffort: 'none',
-    // 推理摘要粒度，通常用 auto 即可
-    reasoningSummary: 'auto',
-    // 输出格式，'json_schema' 更稳妥；'none' 表示不强制结构化输出
-    outputFormat: 'json_schema',
-    // 单次请求最多携带的 seg 数量，超过会拆分为多个请求并发执行
-    maxSegmentsPerRequest: 50,
-    // 拆分为多个请求后最多同时发起的 API 请求数量
-    maxConcurrentRequests: 10,
-    // 单个请求失败后的最大重试次数（指数退避）
-    maxRequestRetries: 3,
-    // 当端点不支持结构化输出时，是否自动降级重试一次
-    structuredOutputAutoFallback: true,
-    // 是否启用 segments 请求结果缓存
-    requestCacheEnabled: true,
-    // 请求结果缓存超时（小时）
-    requestCacheTimeoutHours: 24,
-    // 键盘快捷键，用于开启/关闭选择模式，另：ESC 键是退出选择模式
-    hotkey: 'Alt+KeyA',
-    // 是否启用按住修饰键进行多选 DOM 块
-    multipleSelectionMode: true,
-    // 多选模式修饰键，支持 Alt/Ctrl/Shift/Meta
-    multipleSelectionModeHotkey: 'Alt',
-    // 多选触发后是否合并为一个翻译调度（内部仍按 maxSegmentsPerRequest 分批）
-    multipleSelectionMergeRequest: true,
-    // 是否启用触屏手势快捷操作，双击进入选择模式、三指取消
-    enableTouchShortcuts: true,
-    // 双击判定的最大间隔毫秒数，超过则不视为双击
-    doubleTapMaxDelayMs: 280,
-    // 双击两次触点允许的最大位移像素，超过则不视为同一次双击
-    doubleTapMaxMovePx: 24,
-    // 选择模式下是否启用三指触控快速取消
-    threeFingerCancelEnabled: true,
-    // 是否输出热键调试日志到控制台
-    debugHotkey: false,
-    // 是否输出流程日志（batching/chunk/merged）到控制台
-    debugProcessLog: true,
-    // 是否输出重排翻译（reorder）调试日志到控制台
-    debugReorder: false,
-    // 是否输出完整请求体（JSON）到控制台
-    debugRequestLog: false,
-    // 是否输出完整返回值（JSON）到控制台
-    debugResponseLog: false,
-    // 是否显示页面右下角的调试启动按钮（Translate）
-    showLauncher: false,
-    // 选择模式：'sticky' 连续选择；'manual' 每次选择后退出
-    selectionMode: 'sticky',
-    // 同一 DOM 正在翻译时再次选中，是否弹出忽略提示
-    notifyOnDuplicateSelection: true,
-    // 构建标识，仅用于日志追踪版本来源
-    scriptBuildId: '',
-    // 单次 API 请求超时毫秒数，超时会主动 abort
-    requestTimeoutMs: 60000,
-    // 采样温度，越低越稳定（翻译场景通常建议 0）
-    temperature: 0,
-    // 单次响应最大输出 token 上限，过小可能导致截断
-    maxOutputTokens: 128000,
-    // 是否允许在 iframe 中执行（受 manifest all_frames=true 影响）
-    injectIntoIframes: true
-  };
-  const CONFIG = { ...DEFAULT_CONFIG };
-  const RUNTIME_SETTINGS = {
-    version: SETTINGS_SCHEMA_VERSION,
-    enabled: true,
-    uiTheme: 'system'
-  };
+  const configClient = window.LocalBlockTranslatorConfig.createConfigClient();
+  const CONFIG = configClient.config;
+  const RUNTIME_SETTINGS = configClient.runtimeSettings;
+  const CONFIG_CONSTANTS = configClient.constants;
 
   // 简版的默认规则提示词
   // const DEFAULT_RESPONSE_INSTRUCTIONS = [
@@ -226,15 +137,6 @@
     '- Do not add titles, prefaces, explanations, notes, or quotation marks unless they are present in the source text.',
   ].join('\n');
 
-  const DEFAULT_MAX_SEGMENTS_PER_REQUEST = 50;
-  const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
-  const DEFAULT_MAX_REQUEST_RETRIES = 3;
-  const DEFAULT_HOTKEY = 'Alt+KeyA';
-  const DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS = 24;
-  const RETRY_BASE_DELAY_MS = 500;
-  const RETRY_MAX_DELAY_MS = 5000;
-  const REQUEST_CACHE_STORAGE_PREFIX = 'lit_request_cache_v1_';
-
   const STATUS_ENUM = {
     IDLE: 'idle',
     EXTRACTING: 'extracting',
@@ -307,75 +209,12 @@
   });
   const domClient = window.LocalBlockTranslatorDom.createDomClient();
 
-  function buildDefaultSettingsPayload() {
-    return {
-      version: SETTINGS_SCHEMA_VERSION,
-      enabled: true,
-      uiTheme: 'system',
-      translationConfig: { ...DEFAULT_CONFIG }
-    };
-  }
-
-  function normalizeValueByType(rawValue, defaultValue) {
-    if (typeof defaultValue === 'boolean') {
-      return typeof rawValue === 'boolean' ? rawValue : defaultValue;
-    }
-    if (typeof defaultValue === 'number') {
-      return Number.isFinite(rawValue) ? rawValue : defaultValue;
-    }
-    if (typeof defaultValue === 'string') {
-      return typeof rawValue === 'string' ? rawValue : defaultValue;
-    }
-    return defaultValue;
-  }
-
-  function normalizeTranslationConfig(input) {
-    const source = input && typeof input === 'object' ? input : {};
-    const normalized = {};
-    for (const key of Object.keys(DEFAULT_CONFIG)) {
-      normalized[key] = normalizeValueByType(source[key], DEFAULT_CONFIG[key]);
-    }
-    if (!Object.prototype.hasOwnProperty.call(source, 'promptCacheKeyPlaceholder')) {
-      normalized.promptCacheKeyPlaceholder = normalized.promptCacheKey;
-    }
-    if (!Number.isFinite(normalized.requestCacheTimeoutHours) || normalized.requestCacheTimeoutHours <= 0) {
-      normalized.requestCacheTimeoutHours = DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS;
-    }
-    if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
-      normalized.maxRequestRetries = DEFAULT_MAX_REQUEST_RETRIES;
-    }
-    if (!Number.isInteger(normalized.maxConcurrentRequests) || normalized.maxConcurrentRequests <= 0) {
-      normalized.maxConcurrentRequests = DEFAULT_MAX_CONCURRENT_REQUESTS;
-    }
-    if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(normalized.apiMode)) {
-      normalized.apiMode = DEFAULT_CONFIG.apiMode;
-    }
-    if (!['Alt', 'Ctrl', 'Shift', 'Meta'].includes(normalized.multipleSelectionModeHotkey)) {
-      normalized.multipleSelectionModeHotkey = DEFAULT_CONFIG.multipleSelectionModeHotkey;
-    }
-    return normalized;
-  }
-
-  function normalizeSettingsPayload(rawSettings) {
-    const base = buildDefaultSettingsPayload();
-    const candidate = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
-    const translationConfig = normalizeTranslationConfig(candidate.translationConfig);
-    const uiTheme = ['light', 'dark', 'system'].includes(candidate.uiTheme) ? candidate.uiTheme : base.uiTheme;
-    return {
-      version: Number.isFinite(candidate.version) ? candidate.version : base.version,
-      enabled: typeof candidate.enabled === 'boolean' ? candidate.enabled : base.enabled,
-      uiTheme,
-      translationConfig
-    };
-  }
-
   function applySettingsPayload(settings) {
-    const normalized = normalizeSettingsPayload(settings);
-    RUNTIME_SETTINGS.version = normalized.version;
-    RUNTIME_SETTINGS.enabled = normalized.enabled;
-    RUNTIME_SETTINGS.uiTheme = normalized.uiTheme;
+    configClient.applySettingsPayload(settings);
+    handleSettingsApplied();
+  }
 
-    Object.assign(CONFIG, normalized.translationConfig);
+  function handleSettingsApplied() {
     apiClient.resetRuntimeState();
     hotkeySpec = resolveHotkeySpec(CONFIG.hotkey);
     if (!CONFIG.multipleSelectionMode) {
@@ -391,14 +230,8 @@
   }
 
   async function loadSettingsFromStorage() {
-    if (!chrome?.storage?.sync) {
-      applySettingsPayload(buildDefaultSettingsPayload());
-      return;
-    }
-
-    const defaultSettings = buildDefaultSettingsPayload();
-    const stored = await chrome.storage.sync.get({ settings: defaultSettings });
-    applySettingsPayload(stored.settings || defaultSettings);
+    await configClient.loadSettingsFromStorage();
+    handleSettingsApplied();
   }
 
   function isRuntimeActiveForCurrentFrame() {
@@ -988,7 +821,7 @@
     if (Number.isInteger(raw) && raw > 0) {
       return raw;
     }
-    return DEFAULT_MAX_SEGMENTS_PER_REQUEST;
+    return CONFIG_CONSTANTS.DEFAULT_MAX_SEGMENTS_PER_REQUEST;
   }
 
   function resolveMaxRequestRetries() {
@@ -996,7 +829,7 @@
     if (Number.isInteger(raw) && raw >= 0) {
       return raw;
     }
-    return DEFAULT_MAX_REQUEST_RETRIES;
+    return CONFIG_CONSTANTS.DEFAULT_MAX_REQUEST_RETRIES;
   }
 
   function resolveMaxConcurrentRequests() {
@@ -1004,7 +837,7 @@
     if (Number.isInteger(raw) && raw > 0) {
       return raw;
     }
-    return DEFAULT_MAX_CONCURRENT_REQUESTS;
+    return CONFIG_CONSTANTS.DEFAULT_MAX_CONCURRENT_REQUESTS;
   }
 
   function splitIntoBatches(segments, batchSize) {
@@ -1024,7 +857,7 @@
     if (Number.isFinite(raw) && raw > 0) {
       return raw;
     }
-    return DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS;
+    return CONFIG_CONSTANTS.DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS;
   }
 
   function resolveRequestCacheTimeoutMs() {
@@ -1032,7 +865,7 @@
   }
 
   function makeRequestCacheStorageKey(cacheKey) {
-    return `${REQUEST_CACHE_STORAGE_PREFIX}${cacheKey}`;
+    return `${CONFIG_CONSTANTS.REQUEST_CACHE_STORAGE_PREFIX}${cacheKey}`;
   }
 
   function cloneTranslatedSegments(segments) {
@@ -1125,7 +958,7 @@
   async function clearAllRequestCacheEntries() {
     if (!chrome?.storage?.local) return 0;
     const all = await chrome.storage.local.get(null);
-    const keys = Object.keys(all).filter((key) => key.startsWith(REQUEST_CACHE_STORAGE_PREFIX));
+    const keys = Object.keys(all).filter((key) => key.startsWith(CONFIG_CONSTANTS.REQUEST_CACHE_STORAGE_PREFIX));
     if (!keys.length) return 0;
     await chrome.storage.local.remove(keys);
     return keys.length;
@@ -1334,7 +1167,10 @@
   }
 
   function resolveRetryDelayMs(attempt) {
-    const baseDelay = Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1), RETRY_MAX_DELAY_MS);
+    const baseDelay = Math.min(
+      CONFIG_CONSTANTS.RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1),
+      CONFIG_CONSTANTS.RETRY_MAX_DELAY_MS
+    );
     const jitterFactor = 0.8 + Math.random() * 0.4;
     return Math.max(0, Math.round(baseDelay * jitterFactor));
   }
@@ -1647,16 +1483,18 @@
     const parsed = parseHotkeySpec(hotkeyText);
     if (parsed) return parsed;
 
-    const fallback = parseHotkeySpec(DEFAULT_HOTKEY);
+    const fallback = parseHotkeySpec(CONFIG_CONSTANTS.DEFAULT_HOTKEY);
     if (fallback) {
-      notify(`Invalid hotkey "${String(hotkeyText)}". Fallback to ${DEFAULT_HOTKEY}.`, 'warn');
-      console.warn(`[LocalBlockTranslator] Invalid hotkey "${String(hotkeyText)}". Using fallback: ${DEFAULT_HOTKEY}`);
+      notify(`Invalid hotkey "${String(hotkeyText)}". Fallback to ${CONFIG_CONSTANTS.DEFAULT_HOTKEY}.`, 'warn');
+      console.warn(
+        `[LocalBlockTranslator] Invalid hotkey "${String(hotkeyText)}". Using fallback: ${CONFIG_CONSTANTS.DEFAULT_HOTKEY}`
+      );
       return fallback;
     }
 
     // Extremely defensive fallback to prevent runtime crash if parser logic is broken.
     return {
-      normalizedText: DEFAULT_HOTKEY,
+      normalizedText: CONFIG_CONSTANTS.DEFAULT_HOTKEY,
       requiredAlt: true,
       requiredCtrl: false,
       requiredShift: false,
