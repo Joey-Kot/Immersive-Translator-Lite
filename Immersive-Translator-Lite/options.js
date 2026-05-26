@@ -215,6 +215,8 @@ const I18N_TEXT = {
       reset: '重置设置',
       generate: '生成',
       cleanCache: '清空缓存',
+      testConnection: '测试连接',
+      testingConnection: '测试中',
       show: '显示',
       hide: '隐藏',
       cancel: '取消',
@@ -224,6 +226,9 @@ const I18N_TEXT = {
       saved: '设置已保存。',
       resetDone: '已恢复默认设置并保存。',
       cacheCleared: '请求缓存已清空。',
+      connectionOk: '连接测试成功。',
+      connectionFailedPrefix: '连接测试失败',
+      connectionMissingConfig: '请先填写 API 端点地址、访问令牌和模型名称。',
       saveFailedPrefix: '保存失败',
       cacheClearFailedPrefix: '清空缓存失败',
       initFailedPrefix: '初始化失败'
@@ -350,6 +355,8 @@ const I18N_TEXT = {
       reset: 'Reset Settings',
       generate: 'Generate',
       cleanCache: 'Clean Cache',
+      testConnection: 'Test Connection',
+      testingConnection: 'Testing',
       show: 'Show',
       hide: 'Hide',
       cancel: 'Cancel',
@@ -359,6 +366,9 @@ const I18N_TEXT = {
       saved: 'Settings saved.',
       resetDone: 'Settings were reset to defaults and saved.',
       cacheCleared: 'Request cache cleared.',
+      connectionOk: 'Connection test succeeded.',
+      connectionFailedPrefix: 'Connection test failed',
+      connectionMissingConfig: 'Fill in the API endpoint URL, access token, and model name first.',
       saveFailedPrefix: 'Save failed',
       cacheClearFailedPrefix: 'Clear cache failed',
       initFailedPrefix: 'Initialization failed'
@@ -600,6 +610,7 @@ function applyI18n() {
   document.getElementById('generatePromptCacheKey').textContent = text.buttons.generate;
   document.getElementById('generatePromptCacheKeyPlaceholder').textContent = text.buttons.generate;
   document.getElementById('cleanRequestCache').textContent = text.buttons.cleanCache;
+  document.getElementById('testConnectionBtn').textContent = text.buttons.testConnection;
   document.getElementById('confirmTitle').textContent = text.dialogs.resetTitle;
   document.getElementById('confirmCancelBtn').textContent = text.buttons.cancel;
   document.getElementById('confirmOkBtn').textContent = text.buttons.confirmReset;
@@ -700,6 +711,25 @@ function showStatus(text, isError) {
   statusEl.style.color = isError ? '#d14242' : '';
 }
 
+function setConnectionTestState(state) {
+  const result = document.getElementById('connectionTestResult');
+  result.className = 'connection-test-result';
+  result.removeAttribute('title');
+  result.removeAttribute('aria-label');
+
+  if (state === 'success') {
+    const message = getTextBundle().status.connectionOk;
+    result.classList.add('success');
+    result.title = message;
+    result.setAttribute('aria-label', message);
+  } else if (state === 'failed') {
+    const message = getTextBundle().status.connectionFailedPrefix;
+    result.classList.add('failed');
+    result.title = message;
+    result.setAttribute('aria-label', message);
+  }
+}
+
 function generateUuid() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -731,6 +761,48 @@ async function clearRequestCache() {
     return Number.isFinite(response.clearedCount) ? response.clearedCount : 0;
   }
   return clearRequestCacheStorage();
+}
+
+async function testConnection(config) {
+  const apiBaseUrl = String(config.apiBaseUrl || '').trim();
+  const apiKey = String(config.apiKey || '').trim();
+  const model = String(config.model || '').trim();
+
+  if (!apiBaseUrl || !apiKey || !model) {
+    throw new Error(getTextBundle().status.connectionMissingConfig);
+  }
+
+  const timeoutMs = Number.isFinite(config.requestTimeoutMs) && config.requestTimeoutMs > 0
+    ? config.requestTimeoutMs
+    : DEFAULT_CONFIG_BASE.requestTimeoutMs;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/responses`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        input: 'ping',
+        max_output_tokens: 16
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`API HTTP ${response.status}: ${errText.slice(0, 300)}`);
+    }
+
+    await response.json().catch(() => null);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function readSettings() {
@@ -840,6 +912,33 @@ function bindUI() {
     const input = document.getElementById('promptCacheKeyPlaceholder');
     input.value = generateUuid();
   });
+
+  document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+    const button = document.getElementById('testConnectionBtn');
+    const text = getTextBundle();
+    setConnectionTestState('idle');
+    button.disabled = true;
+    button.textContent = text.buttons.testingConnection;
+
+    try {
+      await testConnection(collectFormSettings().translationConfig);
+      setConnectionTestState('success');
+      showStatus(text.status.connectionOk, false);
+    } catch (error) {
+      console.error('[LIT Options] connection test failed:', error);
+      setConnectionTestState('failed');
+      showStatus(`${text.status.connectionFailedPrefix}: ${String(error?.message || error)}`, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = getTextBundle().buttons.testConnection;
+    }
+  });
+
+  for (const fieldId of ['apiBaseUrl', 'apiKey', 'model']) {
+    document.getElementById(fieldId).addEventListener('input', () => {
+      setConnectionTestState('idle');
+    });
+  }
 
   document.getElementById('cleanRequestCache').addEventListener('click', async () => {
     const confirmed = await openConfirmDialog(

@@ -209,6 +209,56 @@ select:focus {
   min-width: 0;
 }
 
+.connection-test-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.connection-test-row > * {
+  min-width: 0;
+}
+
+.connection-test-result {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connection-test-result.success::before {
+  content: '✓';
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #25a244;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.connection-test-result.failed::before {
+  content: '!';
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #d44747;
+  color: #d44747;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 button {
   border: 0;
   border-radius: 10px;
@@ -327,5 +377,9 @@ button {
 
   .field-spacer {
     display: none;
+  }
+
+  .connection-test-row {
+    grid-template-columns: minmax(0, 1fr) auto 28px;
   }
 }

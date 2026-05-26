@@ -80,7 +80,11 @@
 
               <label class="field">
                 <span class="label">模型名称</span>
-                <input id="model" type="text" />
+                <div class="connection-test-row">
+                  <input id="model" type="text" />
+                  <button id="testConnectionBtn" type="button" class="ghost">测试连接</button>
+                  <span id="connectionTestResult" class="connection-test-result" aria-live="polite"></span>
+                </div>
               </label>
 
               <div class="field field-spacer" aria-hidden="true"></div>
