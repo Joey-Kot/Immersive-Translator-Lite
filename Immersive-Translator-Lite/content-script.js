@@ -227,6 +227,18 @@
     console.info(...args);
   }
 
+  function nowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  }
+
+  function formatDurationMs(durationMs) {
+    if (!Number.isFinite(durationMs)) return '0ms';
+    if (durationMs < 1000) return `${Math.max(0, durationMs).toFixed(1)}ms`;
+    return `${(durationMs / 1000).toFixed(2)}s`;
+  }
+
   function initHotkeys() {
     if (hotkeysInited) return;
     hotkeysInited = true;
@@ -1003,6 +1015,19 @@
     return parseTranslationResponse(rawText);
   }
 
+  async function translateAndValidateChunk(chunk, chunkPayload, opts) {
+    const requestStartAt = nowMs();
+    const translatedChunk = await translateSegmentsOnce(chunkPayload, opts);
+    const requestAndParseMs = nowMs() - requestStartAt;
+    const validateStartAt = nowMs();
+    const validatedChunk = validateTranslationResult(chunk, translatedChunk);
+    return {
+      segments: validatedChunk,
+      requestAndParseMs,
+      validateMs: nowMs() - validateStartAt
+    };
+  }
+
   async function translateSegmentsBatched(payload, options) {
     const opts = options || {};
     const sourceSegments = Array.isArray(payload?.segments) ? payload.segments : [];
@@ -1058,11 +1083,9 @@
           }
         }
 
-        const validatedChunk = await withRetry(
-          async () => {
-            const translatedChunk = await translateSegmentsOnce(chunkPayload, opts);
-            return validateTranslationResult(chunk, translatedChunk);
-          },
+        const chunkStartAt = nowMs();
+        const chunkResult = await withRetry(
+          () => translateAndValidateChunk(chunk, chunkPayload, opts),
           {
             maxRetries: maxRequestRetries,
             shouldRetry: apiClient.isRetryableTranslationError,
@@ -1073,6 +1096,8 @@
             }
           }
         );
+        const validatedChunk = chunkResult.segments;
+        const cacheWriteStartAt = nowMs();
         if (cacheKey) {
           await writeRequestCacheEntry(cacheKey, validatedChunk).catch((error) => {
             logInfoIf(
@@ -1081,9 +1106,10 @@
             );
           });
         }
+        const cacheWriteMs = nowMs() - cacheWriteStartAt;
         logInfoIf(
           shouldLogBatching,
-          `[LocalBlockTranslator] ${requestLabel} chunk ${index + 1}/${chunkedSegments.length} validated (${validatedChunk.length} segments).`
+          `[LocalBlockTranslator] ${requestLabel} chunk ${index + 1}/${chunkedSegments.length} completed (${validatedChunk.length} segments): request+parse=${formatDurationMs(chunkResult.requestAndParseMs)}, validate=${formatDurationMs(chunkResult.validateMs)}, cacheWrite=${formatDurationMs(cacheWriteMs)}, total=${formatDurationMs(nowMs() - chunkStartAt)}.`
         );
         return validatedChunk;
       }));
