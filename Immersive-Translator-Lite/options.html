@@ -191,6 +191,11 @@
             <h2 id="groupTitleRequest" class="group-title">Request Settings</h2>
             <div class="grid two-col">
               <label class="field">
+                <span class="label">API 并发请求数</span>
+                <input id="maxConcurrentRequests" type="number" step="1" min="1" value="10" />
+              </label>
+
+              <label class="field">
                 <span class="label">请求超时时间（毫秒）</span>
                 <input id="requestTimeoutMs" type="number" step="100" />
               </label>

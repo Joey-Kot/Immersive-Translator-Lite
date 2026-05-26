@@ -116,6 +116,7 @@ const DEFAULT_CONFIG_BASE = {
   reasoningSummary: 'auto',
   outputFormat: 'json_schema',
   maxSegmentsPerRequest: 50,
+  maxConcurrentRequests: 10,
   maxRequestRetries: 3,
   structuredOutputAutoFallback: true,
   requestCacheEnabled: true,
@@ -176,6 +177,7 @@ const FIELD_TYPES = {
   reasoningSummary: 'string',
   outputFormat: 'string',
   maxSegmentsPerRequest: 'number',
+  maxConcurrentRequests: 'number',
   maxRequestRetries: 'number',
   structuredOutputAutoFallback: 'boolean',
   requestCacheEnabled: 'boolean',
@@ -273,6 +275,7 @@ const I18N_TEXT = {
       multipleSelectionMergeRequest: '多选合并请求',
       temperature: '采样温度',
       maxOutputTokens: '最大输出 Token 数',
+      maxConcurrentRequests: 'API 并发请求数',
       requestTimeoutMs: '请求超时时间（毫秒）',
       maxSegmentsPerRequest: '单次请求最大分段数',
       maxRequestRetries: '最大请求重试次数',
@@ -436,6 +439,7 @@ const I18N_TEXT = {
       multipleSelectionMergeRequest: 'Multiple Selection Merge Request',
       temperature: 'Sampling Temperature',
       maxOutputTokens: 'Max Output Tokens',
+      maxConcurrentRequests: 'API Concurrent Requests',
       requestTimeoutMs: 'Request Timeout (ms)',
       maxSegmentsPerRequest: 'Max Segments Per Request',
       maxRequestRetries: 'Maximum Request Retries',
@@ -586,6 +590,12 @@ function normalizeSettings(input) {
     result.translationConfig.requestCacheTimeoutHours <= 0
   ) {
     result.translationConfig.requestCacheTimeoutHours = defaults.requestCacheTimeoutHours;
+  }
+  if (
+    !Number.isInteger(result.translationConfig.maxConcurrentRequests) ||
+    result.translationConfig.maxConcurrentRequests <= 0
+  ) {
+    result.translationConfig.maxConcurrentRequests = defaults.maxConcurrentRequests;
   }
   if (
     !Number.isInteger(result.translationConfig.maxRequestRetries) ||

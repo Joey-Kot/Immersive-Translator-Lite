@@ -72,6 +72,8 @@
     outputFormat: 'json_schema',
     // 单次请求最多携带的 seg 数量，超过会拆分为多个请求并发执行
     maxSegmentsPerRequest: 50,
+    // 拆分为多个请求后最多同时发起的 API 请求数量
+    maxConcurrentRequests: 10,
     // 单个请求失败后的最大重试次数（指数退避）
     maxRequestRetries: 3,
     // 当端点不支持结构化输出时，是否自动降级重试一次
@@ -231,6 +233,7 @@
   const DEFAULT_REASONING_SUMMARY = 'auto';
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
   const DEFAULT_MAX_SEGMENTS_PER_REQUEST = 50;
+  const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
   const DEFAULT_MAX_REQUEST_RETRIES = 3;
   const DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK = true;
   const DEFAULT_HOTKEY = 'Alt+KeyA';
@@ -399,6 +402,9 @@
     }
     if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
       normalized.maxRequestRetries = DEFAULT_MAX_REQUEST_RETRIES;
+    }
+    if (!Number.isInteger(normalized.maxConcurrentRequests) || normalized.maxConcurrentRequests <= 0) {
+      normalized.maxConcurrentRequests = DEFAULT_MAX_CONCURRENT_REQUESTS;
     }
     if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(normalized.apiMode)) {
       normalized.apiMode = DEFAULT_CONFIG.apiMode;
@@ -1231,6 +1237,14 @@
     return DEFAULT_MAX_REQUEST_RETRIES;
   }
 
+  function resolveMaxConcurrentRequests() {
+    const raw = Number(CONFIG.maxConcurrentRequests);
+    if (Number.isInteger(raw) && raw > 0) {
+      return raw;
+    }
+    return DEFAULT_MAX_CONCURRENT_REQUESTS;
+  }
+
   function splitIntoBatches(segments, batchSize) {
     const chunks = [];
     for (let i = 0; i < segments.length; i += batchSize) {
@@ -1609,6 +1623,7 @@
     if (!sourceSegments.length) return [];
 
     const maxPerRequest = resolveMaxSegmentsPerRequest();
+    const maxConcurrentRequests = resolveMaxConcurrentRequests();
     const maxRequestRetries = resolveMaxRequestRetries();
     const chunkedSegments = splitIntoBatches(sourceSegments, maxPerRequest);
     const requestLabel = opts.requestLabel || 'translation';
@@ -1621,13 +1636,16 @@
     );
     if (chunkedSegments.length > 1 && shouldLogBatching) {
       notify(
-        `${requestLabel}: ${sourceSegments.length} segments split into ${chunkedSegments.length} parallel requests.`,
+        `${requestLabel}: ${sourceSegments.length} segments split into ${chunkedSegments.length} requests, concurrency ${maxConcurrentRequests}.`,
         'info'
       );
     }
 
-    const chunkResults = await Promise.all(
-      chunkedSegments.map(async (chunk, index) => {
+    const chunkResults = [];
+    for (let startIndex = 0; startIndex < chunkedSegments.length; startIndex += maxConcurrentRequests) {
+      const chunkGroup = chunkedSegments.slice(startIndex, startIndex + maxConcurrentRequests);
+      const groupResults = await Promise.all(chunkGroup.map(async (chunk, groupIndex) => {
+        const index = startIndex + groupIndex;
         const chunkPayload = {
           ...payload,
           segments: chunk
@@ -1682,8 +1700,9 @@
           `[LocalBlockTranslator] ${requestLabel} chunk ${index + 1}/${chunkedSegments.length} validated (${validatedChunk.length} segments).`
         );
         return validatedChunk;
-      })
-    );
+      }));
+      chunkResults.push(...groupResults);
+    }
 
     const merged = chunkResults.flat();
     const validatedMerged = validateTranslationResult(sourceSegments, merged);
