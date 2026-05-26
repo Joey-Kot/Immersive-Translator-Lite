@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Immersive Translator Lite",
   "version": "0.0.3",
-  "description": "Block-level Immersive Translator with iframe support using Responses API.",
+  "description": "A block-level immersive translator with iframe support, powered by OpenAI Responses, OpenAI Chat Completions, Gemini, and DeepSeek LLM APIs.",
   "permissions": [
     "storage",
     "tabs",
