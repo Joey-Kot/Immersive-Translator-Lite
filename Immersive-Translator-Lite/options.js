@@ -323,8 +323,8 @@ const I18N_TEXT = {
         dark: '夜间模式'
       },
       apiMode: {
-        responses: 'Responses',
-        chat_completions: 'Chat Completions',
+        responses: 'OpenAI Responses',
+        chat_completions: 'OpenAI Completions',
         gemini: 'Gemini'
       },
       selectionMode: {
@@ -482,8 +482,8 @@ const I18N_TEXT = {
         dark: 'Dark'
       },
       apiMode: {
-        responses: 'Responses',
-        chat_completions: 'Chat Completions',
+        responses: 'OpenAI Responses',
+        chat_completions: 'OpenAI Completions',
         gemini: 'Gemini'
       },
       selectionMode: {
