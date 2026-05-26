@@ -36,6 +36,7 @@
       ],
       "js": [
         "content-api.js",
+        "content-dom.js",
         "content-script.js"
       ],
       "run_at": "document_start",
