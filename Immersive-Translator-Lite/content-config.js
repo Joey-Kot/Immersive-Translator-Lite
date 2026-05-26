@@ -7,7 +7,7 @@
     apiMode: 'responses',
     apiBaseUrl: 'https://api.example.com/v1',
     apiKey: 'sk-xxx',
-    model: 'gpt-5.1',
+    model: 'gpt-5.4-mini',
     sourceLang: 'Any Language',
     targetLang: 'Chinese Simplified',
     responseInstructions: '',
