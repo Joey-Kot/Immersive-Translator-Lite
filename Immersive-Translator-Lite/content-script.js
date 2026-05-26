@@ -40,7 +40,7 @@
    */
 
   const DEFAULT_CONFIG = {
-    // API 模式，responses 使用 /responses，chat_completions 使用 /chat/completions
+    // API 模式，responses 使用 /responses，chat_completions 使用 /chat/completions，gemini 使用 generateContent
     apiMode: 'responses',
     // API 服务地址，末尾可带或不带 /v1，脚本会自动拼接对应路径
     apiBaseUrl: 'https://api.example.com/v1',
@@ -54,6 +54,8 @@
     targetLang: 'Chinese Simplified',
     // 额外系统指令，留空则使用内置默认翻译规则
     responseInstructions: '',
+    // Gemini 模式下是否缓存 System Instructions
+    geminiCacheEnabled: true,
     // Prompt Cache 的缓存键，相同键可提升重复请求命中率
     promptCacheKey: '188f6fd3-49ea-4f63-ae50-b87cf9574a1a',
     // 占位符重排翻译专用的 Prompt Cache 缓存键
@@ -234,6 +236,7 @@
   const RETRY_BASE_DELAY_MS = 500;
   const RETRY_MAX_DELAY_MS = 5000;
   const REQUEST_CACHE_STORAGE_PREFIX = 'lit_request_cache_v1_';
+  const GEMINI_SYSTEM_CACHE_STORAGE_PREFIX = 'lit_gemini_system_cache_v1_';
 
   // 跳过这些标签的提取和翻译
   const SKIP_TAGS = new Set([
@@ -355,6 +358,8 @@
   let multiSelectionHotkeyPressed = false;
   /** @type {number} */
   let multiSelectionBatchRunning = 0;
+  /** @type {boolean} */
+  let geminiSystemCacheUnavailable = false;
 
   function buildDefaultSettingsPayload() {
     return {
@@ -393,7 +398,7 @@
     if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
       normalized.maxRequestRetries = DEFAULT_MAX_REQUEST_RETRIES;
     }
-    if (!['responses', 'chat_completions'].includes(normalized.apiMode)) {
+    if (!['responses', 'chat_completions', 'gemini'].includes(normalized.apiMode)) {
       normalized.apiMode = DEFAULT_CONFIG.apiMode;
     }
     if (!['Alt', 'Ctrl', 'Shift', 'Meta'].includes(normalized.multipleSelectionModeHotkey)) {
@@ -422,6 +427,7 @@
     RUNTIME_SETTINGS.uiTheme = normalized.uiTheme;
 
     Object.assign(CONFIG, normalized.translationConfig);
+    geminiSystemCacheUnavailable = false;
     hotkeySpec = resolveHotkeySpec(CONFIG.hotkey);
     if (!CONFIG.multipleSelectionMode) {
       clearMultiSelectionState();
@@ -1585,7 +1591,7 @@
     const instructions = buildInstructionText(payload, CONFIG.responseInstructions, {
       placeholderRules: opts.placeholderRules === true
     });
-    const requestBody = buildTranslationRequestBody(prompt, instructions, {
+    const requestBody = await buildTranslationRequestBody(prompt, instructions, {
       placeholderRules: opts.placeholderRules === true
     });
 
@@ -1697,8 +1703,8 @@
     });
   }
 
-  function buildTranslationRequestBody(prompt, instructions, options) {
-    const apiMode = CONFIG.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
+  async function buildTranslationRequestBody(prompt, instructions, options) {
+    const apiMode = normalizeApiMode(CONFIG.apiMode);
     const opts = options || {};
     const isPlaceholderMode = opts.placeholderRules === true;
     const promptCacheKeyNormal = (CONFIG.promptCacheKey || '').trim() || DEFAULT_PROMPT_CACHE_KEY;
@@ -1710,6 +1716,16 @@
     const reasoningEffort = (CONFIG.reasoningEffort || '').trim() || DEFAULT_REASONING_EFFORT;
     const reasoningSummary = (CONFIG.reasoningSummary || '').trim() || DEFAULT_REASONING_SUMMARY;
     const outputFormat = (CONFIG.outputFormat || '').trim() || DEFAULT_OUTPUT_FORMAT;
+
+    if (apiMode === 'gemini') {
+      const requestBody = {
+        contents: buildGeminiContents(prompt),
+        generationConfig: buildGeminiGenerationConfig(outputFormat, reasoningEffort)
+      };
+
+      await attachGeminiSystemInstruction(requestBody, instructions);
+      return requestBody;
+    }
 
     if (apiMode === 'chat_completions') {
       const requestBody = {
@@ -1820,6 +1836,237 @@
     }
   }
 
+  function normalizeApiMode(apiMode) {
+    return ['responses', 'chat_completions', 'gemini'].includes(apiMode) ? apiMode : 'responses';
+  }
+
+  function buildGeminiContents(prompt) {
+    return [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: extractChatCompletionsUserContent(prompt)
+          }
+        ]
+      }
+    ];
+  }
+
+  function buildGeminiGenerationConfig(outputFormat, reasoningEffort) {
+    const generationConfig = {
+      temperature: CONFIG.temperature,
+      maxOutputTokens: CONFIG.maxOutputTokens,
+      thinkingConfig: buildGeminiThinkingConfig(reasoningEffort)
+    };
+
+    if (outputFormat === 'json_schema') {
+      generationConfig.responseMimeType = 'application/json';
+      generationConfig.responseSchema = buildGeminiResponseSchema();
+    }
+
+    return generationConfig;
+  }
+
+  function buildGeminiThinkingConfig(reasoningEffort) {
+    const effort = String(reasoningEffort || '').trim().toLowerCase();
+    const levelMap = {
+      none: 'MINIMAL',
+      minimal: 'MINIMAL',
+      low: 'LOW',
+      medium: 'MEDIUM',
+      high: 'HIGH',
+      xhigh: 'HIGH'
+    };
+    return {
+      thinkingLevel: levelMap[effort] || 'MEDIUM'
+    };
+  }
+
+  function buildGeminiResponseSchema() {
+    return {
+      type: 'OBJECT',
+      additionalProperties: false,
+      required: ['segments'],
+      properties: {
+        segments: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'STRING' },
+              text: { type: 'STRING' }
+            },
+            required: ['id', 'text']
+          }
+        }
+      }
+    };
+  }
+
+  function buildGeminiSystemInstruction(instructions) {
+    return {
+      parts: [
+        {
+          text: String(instructions || '')
+        }
+      ]
+    };
+  }
+
+  async function attachGeminiSystemInstruction(requestBody, instructions) {
+    const instructionText = String(instructions || '').trim();
+    if (!instructionText) return;
+
+    if (CONFIG.geminiCacheEnabled === false || geminiSystemCacheUnavailable) {
+      requestBody.systemInstruction = buildGeminiSystemInstruction(instructionText);
+      return;
+    }
+
+    try {
+      const cacheName = await resolveGeminiSystemCacheName(instructionText);
+      if (cacheName) {
+        requestBody.cachedContent = cacheName;
+        return;
+      }
+    } catch (error) {
+      if (isGeminiCacheEndpointUnsupportedError(error)) {
+        geminiSystemCacheUnavailable = true;
+      }
+      console.warn('[LocalBlockTranslator] Gemini system instruction cache unavailable, falling back:', error);
+    }
+
+    requestBody.systemInstruction = buildGeminiSystemInstruction(instructionText);
+  }
+
+  function isGeminiCacheEndpointUnsupportedError(error) {
+    const message = getErrorMessage(error).toLowerCase();
+    return (
+      message.includes('api http 404') ||
+      (message.includes('cachedcontents') && message.includes('invalid url')) ||
+      (message.includes('cachedcontents') && message.includes('not found'))
+    );
+  }
+
+  async function resolveGeminiSystemCacheName(instructionText) {
+    if (!chrome?.storage?.local) return '';
+
+    const signature = await buildGeminiSystemCacheSignature(instructionText);
+    const storageKey = `${GEMINI_SYSTEM_CACHE_STORAGE_PREFIX}${signature}`;
+    const stored = await chrome.storage.local.get(storageKey);
+    const entry = stored[storageKey];
+    if (isValidGeminiSystemCacheEntry(entry)) {
+      return entry.name;
+    }
+
+    if (entry) {
+      await chrome.storage.local.remove(storageKey).catch(() => {});
+    }
+
+    const created = await createGeminiSystemCache(instructionText);
+    if (!created?.name) return '';
+
+    const expiresAt = parseGeminiCacheExpiresAt(created.expireTime);
+    await chrome.storage.local.set({
+      [storageKey]: {
+        name: created.name,
+        model: formatGeminiModelPath(CONFIG.model),
+        signature,
+        expireTime: created.expireTime || '',
+        expiresAt
+      }
+    });
+    return created.name;
+  }
+
+  async function buildGeminiSystemCacheSignature(instructionText) {
+    const raw = JSON.stringify({
+      model: formatGeminiModelPath(CONFIG.model),
+      instructions: instructionText,
+      retention: resolveGeminiCacheRetention()
+    });
+    return sha256Hex(raw);
+  }
+
+  function isValidGeminiSystemCacheEntry(entry) {
+    if (!entry || typeof entry !== 'object') return false;
+    if (typeof entry.name !== 'string' || !entry.name.startsWith('cachedContents/')) return false;
+    if (entry.model !== formatGeminiModelPath(CONFIG.model)) return false;
+    if (!Number.isFinite(entry.expiresAt)) return false;
+    return Date.now() < entry.expiresAt - 60 * 1000;
+  }
+
+  async function createGeminiSystemCache(instructionText) {
+    const endpoint = buildGeminiCacheEndpoint();
+    const requestBody = {
+      model: formatGeminiModelPath(CONFIG.model),
+      systemInstruction: buildGeminiSystemInstruction(instructionText)
+    };
+    const ttl = buildGeminiCacheTtl();
+    if (ttl) {
+      requestBody.ttl = ttl;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
+    try {
+      return await postTranslationRequest(endpoint, controller.signal, requestBody, {
+        apiMode: 'gemini'
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function resolveGeminiCacheRetention() {
+    return (CONFIG.promptCacheRetention || '').trim() || DEFAULT_PROMPT_CACHE_RETENTION;
+  }
+
+  function buildGeminiCacheTtl() {
+    const retention = resolveGeminiCacheRetention();
+    if (retention === 'in_memory') {
+      return '';
+    }
+
+    const hourMatch = retention.match(/^(\d+(?:\.\d+)?)h$/i);
+    if (hourMatch) {
+      return `${Math.max(1, Math.round(Number(hourMatch[1]) * 60 * 60))}s`;
+    }
+
+    const secondMatch = retention.match(/^(\d+(?:\.\d+)?)s$/i);
+    if (secondMatch) {
+      return `${Math.max(1, Math.round(Number(secondMatch[1])))}s`;
+    }
+
+    return '86400s';
+  }
+
+  function parseGeminiCacheExpiresAt(expireTime) {
+    const parsed = Date.parse(String(expireTime || ''));
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+
+    const ttl = buildGeminiCacheTtl();
+    const match = ttl.match(/^(\d+)s$/);
+    const fallbackSeconds = match ? Number(match[1]) : 3600;
+    return Date.now() + Math.max(1, fallbackSeconds) * 1000;
+  }
+
+  function formatGeminiModelPath(model) {
+    const trimmed = String(model || '').trim().replace(/^\/+/, '');
+    return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
+  }
+
+  function buildGeminiCacheEndpoint() {
+    return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/cachedContents`;
+  }
+
+  function buildGeminiGenerateContentEndpoint() {
+    return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${formatGeminiModelPath(CONFIG.model)}:generateContent`;
+  }
+
   function buildTranslationJsonSchemaFormat() {
     return {
       type: 'json_schema',
@@ -1860,12 +2107,11 @@
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
-    const apiMode = CONFIG.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
-    const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
-    const endpoint = `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
+    const apiMode = normalizeApiMode(CONFIG.apiMode);
+    const endpoint = buildTranslationEndpoint(apiMode);
 
     try {
-      const json = await postTranslationRequest(endpoint, controller.signal, requestBody);
+      const json = await postTranslationRequest(endpoint, controller.signal, requestBody, { apiMode });
       const content = extractTranslationOutputText(json, apiMode);
       if (!content) {
         throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
@@ -1873,6 +2119,17 @@
 
       return content;
     } catch (error) {
+      if (shouldRetryWithoutGeminiThinking(error, requestBody, apiMode)) {
+        const fallbackBody = cloneWithoutGeminiThinking(requestBody);
+        console.warn('[LocalBlockTranslator] Gemini thinkingConfig unsupported, retrying once without thinking config');
+        const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody, { apiMode });
+        const content = extractTranslationOutputText(json, apiMode);
+        if (!content) {
+          throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
+        }
+        return content;
+      }
+
       if (!shouldRetryWithoutStructuredOutput(error, requestBody)) {
         throw error;
       }
@@ -1880,7 +2137,7 @@
       const fallbackBody = cloneWithoutStructuredOutput(requestBody);
       notify('Structured output unsupported by endpoint. Falling back to plain JSON mode once.', 'warn');
       console.warn('[LocalBlockTranslator] structured output unsupported, retrying once without structured output config');
-      const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody);
+      const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody, { apiMode });
       const content = extractTranslationOutputText(json, apiMode);
       if (!content) {
         throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
@@ -1891,20 +2148,31 @@
     }
   }
 
-  async function postTranslationRequest(endpoint, signal, requestBody) {
+  function buildTranslationEndpoint(apiMode) {
+    if (apiMode === 'gemini') {
+      return buildGeminiGenerateContentEndpoint();
+    }
+    const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+    return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
+  }
+
+  async function postTranslationRequest(endpoint, signal, requestBody, options) {
+    const opts = options || {};
+    const apiMode = normalizeApiMode(opts.apiMode || CONFIG.apiMode);
     if (CONFIG.debugRequestLog) {
       console.info('[LocalBlockTranslator] request body JSON:\n' + JSON.stringify(requestBody, null, 2));
     }
 
-    const response = await fetch(endpoint, {
+    const fetchOptions = {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${CONFIG.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody),
-      signal
-    });
+      headers: buildApiRequestHeaders(apiMode),
+      body: JSON.stringify(requestBody)
+    };
+    if (signal) {
+      fetchOptions.signal = signal;
+    }
+
+    const response = await fetch(endpoint, fetchOptions);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
@@ -1918,6 +2186,18 @@
     return json;
   }
 
+  function buildApiRequestHeaders(apiMode) {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (apiMode === 'gemini') {
+      headers['x-goog-api-key'] = CONFIG.apiKey;
+    } else {
+      headers.Authorization = `Bearer ${CONFIG.apiKey}`;
+    }
+    return headers;
+  }
+
   function shouldRetryWithoutStructuredOutput(error, requestBody) {
     const autoFallbackEnabled =
       CONFIG.structuredOutputAutoFallback ?? DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK;
@@ -1928,12 +2208,40 @@
     return isStructuredOutputUnsupportedMessage(error.message);
   }
 
+  function shouldRetryWithoutGeminiThinking(error, requestBody, apiMode) {
+    if (apiMode !== 'gemini') return false;
+    if (!requestBody?.generationConfig?.thinkingConfig) return false;
+    if (!(error instanceof Error)) return false;
+    return isGeminiThinkingUnsupportedMessage(error.message);
+  }
+
+  function isGeminiThinkingUnsupportedMessage(message) {
+    if (typeof message !== 'string') return false;
+    const lower = message.toLowerCase();
+    const mentionsThinking =
+      lower.includes('thinkingconfig') ||
+      lower.includes('thinking_config') ||
+      lower.includes('thinkinglevel') ||
+      lower.includes('thinking level') ||
+      lower.includes('thinkingbudget') ||
+      lower.includes('thinking budget');
+    const mentionsUnsupported =
+      lower.includes('unknown') ||
+      lower.includes('unsupported') ||
+      lower.includes('not supported') ||
+      lower.includes('invalid') ||
+      lower.includes('unrecognized');
+    return mentionsThinking && mentionsUnsupported;
+  }
+
   function hasStructuredOutputConfig(requestBody) {
     return Boolean(
       requestBody &&
       (
         (requestBody.text && requestBody.text.format) ||
-        requestBody.response_format
+        requestBody.response_format ||
+        requestBody.generationConfig?.responseSchema ||
+        requestBody.generationConfig?.responseJsonSchema
       )
     );
   }
@@ -1944,6 +2252,10 @@
     const mentionsStructuredParam =
       lower.includes('text.format') ||
       lower.includes('json_schema') ||
+      lower.includes('responsemime') ||
+      lower.includes('responseschema') ||
+      lower.includes('response_mime') ||
+      lower.includes('response_schema') ||
       lower.includes('response_format') ||
       lower.includes('structured output');
     const mentionsUnsupported =
@@ -1959,6 +2271,22 @@
     const fallbackBody = { ...requestBody };
     delete fallbackBody.text;
     delete fallbackBody.response_format;
+    if (fallbackBody.generationConfig) {
+      fallbackBody.generationConfig = { ...fallbackBody.generationConfig };
+      delete fallbackBody.generationConfig.responseMimeType;
+      delete fallbackBody.generationConfig.responseSchema;
+      delete fallbackBody.generationConfig.responseJsonSchema;
+      delete fallbackBody.generationConfig._responseJsonSchema;
+    }
+    return fallbackBody;
+  }
+
+  function cloneWithoutGeminiThinking(requestBody) {
+    const fallbackBody = { ...requestBody };
+    if (fallbackBody.generationConfig) {
+      fallbackBody.generationConfig = { ...fallbackBody.generationConfig };
+      delete fallbackBody.generationConfig.thinkingConfig;
+    }
     return fallbackBody;
   }
 
@@ -2040,12 +2368,17 @@
   }
 
   function getApiModeDisplayName(apiMode) {
-    return apiMode === 'chat_completions' ? 'Chat Completions API' : 'Responses API';
+    if (apiMode === 'chat_completions') return 'Chat Completions API';
+    if (apiMode === 'gemini') return 'Gemini API';
+    return 'Responses API';
   }
 
   function extractTranslationOutputText(json, apiMode) {
     if (apiMode === 'chat_completions') {
       return extractChatCompletionsOutputText(json);
+    }
+    if (apiMode === 'gemini') {
+      return extractGeminiOutputText(json);
     }
     return extractResponsesOutputText(json);
   }
@@ -2068,6 +2401,22 @@
       } else if (typeof item?.text === 'string') {
         chunks.push(item.text);
       }
+    }
+    return chunks.join('\n').trim();
+  }
+
+  function extractGeminiOutputText(json) {
+    const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
+    const chunks = [];
+    for (const candidate of candidates) {
+      const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+      for (const part of parts) {
+        if (part?.thought === true) continue;
+        if (typeof part?.text === 'string') {
+          chunks.push(part.text);
+        }
+      }
+      if (chunks.length) break;
     }
     return chunks.join('\n').trim();
   }

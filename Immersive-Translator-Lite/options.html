@@ -50,6 +50,7 @@
                 <select id="apiMode">
                   <option value="responses">Responses</option>
                   <option value="chat_completions">Chat Completions</option>
+                  <option value="gemini">Gemini</option>
                 </select>
               </label>
             </div>
@@ -136,6 +137,15 @@
                 </select>
               </label>
 
+              <label class="field switch-field" data-gemini-only="true">
+                <span class="label">Gemini 缓存</span>
+                <span class="switch-wrap">
+                  <input id="geminiCacheEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">启用 Gemini System Instructions 缓存</span>
+                </span>
+              </label>
+
               <label class="field">
                 <span class="label">缓存保留时长</span>
                 <select id="promptCacheRetention">
@@ -144,7 +154,7 @@
                 </select>
               </label>
 
-              <label class="field">
+              <label class="field" data-gemini-hidden="true">
                 <span class="label">提示词缓存键（普通模式）</span>
                 <div class="password-row">
                   <input id="promptCacheKey" type="text" />
@@ -152,7 +162,7 @@
                 </div>
               </label>
 
-              <label class="field">
+              <label class="field" data-gemini-hidden="true">
                 <span class="label">提示词缓存键（占位符模式）</span>
                 <div class="password-row">
                   <input id="promptCacheKeyPlaceholder" type="text" />

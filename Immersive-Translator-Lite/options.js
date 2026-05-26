@@ -109,6 +109,7 @@ const DEFAULT_CONFIG_BASE = {
   sourceLang: 'Any Language',
   targetLang: 'Chinese Simplified',
   responseInstructions: DEFAULT_RESPONSE_INSTRUCTIONS,
+  geminiCacheEnabled: true,
   promptCacheRetention: '24h',
   reasoningEffort: 'none',
   reasoningSummary: 'auto',
@@ -165,6 +166,7 @@ const FIELD_TYPES = {
   sourceLang: 'string',
   targetLang: 'string',
   responseInstructions: 'string',
+  geminiCacheEnabled: 'boolean',
   promptCacheKey: 'string',
   promptCacheKeyPlaceholder: 'string',
   promptCacheRetention: 'string',
@@ -278,6 +280,7 @@ const I18N_TEXT = {
       outputFormat: '输出格式',
       reasoningEffort: '推理强度',
       reasoningSummary: '推理摘要级别',
+      geminiCacheEnabled: 'Gemini 缓存',
       promptCacheKey: '提示词缓存键（普通模式）',
       promptCacheKeyPlaceholder: '提示词缓存键（占位符模式）',
       promptCacheRetention: '缓存保留时长',
@@ -302,6 +305,7 @@ const I18N_TEXT = {
       multipleSelectionMode: '按住多选键可连续选择多个 DOM 块',
       multipleSelectionMergeRequest: '松开多选键后将已选块合并翻译请求',
       requestCacheEnabled: '开启请求结果缓存',
+      geminiCacheEnabled: '启用 Gemini System Instructions 缓存',
       enableTouchShortcuts: '双击进入、三指取消',
       threeFingerCancelEnabled: '三指触控取消选择模式',
       notifyOnDuplicateSelection: '重复选中时提示',
@@ -320,7 +324,8 @@ const I18N_TEXT = {
       },
       apiMode: {
         responses: 'Responses',
-        chat_completions: 'Chat Completions'
+        chat_completions: 'Chat Completions',
+        gemini: 'Gemini'
       },
       selectionMode: {
         sticky: '连续选择（sticky）',
@@ -434,6 +439,7 @@ const I18N_TEXT = {
       outputFormat: 'Output Format',
       reasoningEffort: 'Reasoning Effort',
       reasoningSummary: 'Reasoning Summary Level',
+      geminiCacheEnabled: 'Gemini Cache',
       promptCacheKey: 'Prompt Cache Key (Normal Mode)',
       promptCacheKeyPlaceholder: 'Prompt Cache Key (Placeholder Mode)',
       promptCacheRetention: 'Cache Retention Duration',
@@ -458,6 +464,7 @@ const I18N_TEXT = {
       multipleSelectionMode: 'Hold a modifier key to select multiple DOM blocks',
       multipleSelectionMergeRequest: 'Merge selected blocks into one translation dispatch on key release',
       requestCacheEnabled: 'Enable request result cache',
+      geminiCacheEnabled: 'Enable Gemini System Instructions cache',
       enableTouchShortcuts: 'Double-tap to enter, three-finger to cancel',
       threeFingerCancelEnabled: 'Allow three-finger touch to cancel selection mode',
       notifyOnDuplicateSelection: 'Show warning for duplicate selections',
@@ -476,7 +483,8 @@ const I18N_TEXT = {
       },
       apiMode: {
         responses: 'Responses',
-        chat_completions: 'Chat Completions'
+        chat_completions: 'Chat Completions',
+        gemini: 'Gemini'
       },
       selectionMode: {
         sticky: 'Sticky (continuous selection)',
@@ -550,7 +558,7 @@ function normalizeSettings(input) {
   if (!['auto', 'concise', 'detailed'].includes(result.translationConfig.reasoningSummary)) {
     result.translationConfig.reasoningSummary = defaults.reasoningSummary;
   }
-  if (!['responses', 'chat_completions'].includes(result.translationConfig.apiMode)) {
+  if (!['responses', 'chat_completions', 'gemini'].includes(result.translationConfig.apiMode)) {
     result.translationConfig.apiMode = defaults.apiMode;
   }
   if (!['in_memory', '24h'].includes(result.translationConfig.promptCacheRetention)) {
@@ -748,9 +756,20 @@ function applyTheme(themeMode) {
 
 function applyApiModeVisibility(apiMode) {
   const isChatCompletions = apiMode === 'chat_completions';
+  const isGemini = apiMode === 'gemini';
   const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
   for (const field of responsesOnlyFields) {
-    field.hidden = isChatCompletions;
+    field.hidden = isChatCompletions || isGemini;
+  }
+
+  const geminiOnlyFields = document.querySelectorAll('[data-gemini-only="true"]');
+  for (const field of geminiOnlyFields) {
+    field.hidden = !isGemini;
+  }
+
+  const geminiHiddenFields = document.querySelectorAll('[data-gemini-hidden="true"]');
+  for (const field of geminiHiddenFields) {
+    field.hidden = isGemini;
   }
 }
 
@@ -816,7 +835,7 @@ async function testConnection(config) {
   const apiBaseUrl = String(config.apiBaseUrl || '').trim();
   const apiKey = String(config.apiKey || '').trim();
   const model = String(config.model || '').trim();
-  const apiMode = config.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
+  const apiMode = ['responses', 'chat_completions', 'gemini'].includes(config.apiMode) ? config.apiMode : 'responses';
 
   if (!apiBaseUrl || !apiKey || !model) {
     throw new Error(getTextBundle().status.connectionMissingConfig);
@@ -827,32 +846,14 @@ async function testConnection(config) {
     : DEFAULT_CONFIG_BASE.requestTimeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
-  const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
-  const requestBody = apiMode === 'chat_completions'
-    ? {
-        model,
-        messages: [
-          {
-            role: 'user',
-            content: 'ping'
-          }
-        ],
-        max_completion_tokens: 16
-      }
-    : {
-        model,
-        input: 'ping',
-        max_output_tokens: 16
-      };
+  const endpoint = buildConnectionTestEndpoint(apiBaseUrl, model, apiMode);
+  const requestBody = buildConnectionTestRequestBody(model, apiMode);
+  const headers = buildConnectionTestHeaders(apiKey, apiMode);
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
@@ -866,6 +867,67 @@ async function testConnection(config) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function buildConnectionTestEndpoint(apiBaseUrl, model, apiMode) {
+  const baseUrl = apiBaseUrl.replace(/\/$/, '');
+  if (apiMode === 'gemini') {
+    return `${baseUrl}/${formatGeminiModelPath(model)}:generateContent`;
+  }
+  const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+  return `${baseUrl}/${endpointPath}`;
+}
+
+function formatGeminiModelPath(model) {
+  const trimmed = String(model || '').trim().replace(/^\/+/, '');
+  return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
+}
+
+function buildConnectionTestRequestBody(model, apiMode) {
+  if (apiMode === 'gemini') {
+    return {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: 'ping' }]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 16
+      }
+    };
+  }
+
+  if (apiMode === 'chat_completions') {
+    return {
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: 'ping'
+        }
+      ],
+      max_completion_tokens: 16
+    };
+  }
+
+  return {
+    model,
+    input: 'ping',
+    max_output_tokens: 16
+  };
+}
+
+function buildConnectionTestHeaders(apiKey, apiMode) {
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (apiMode === 'gemini') {
+    headers['x-goog-api-key'] = apiKey;
+  } else {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+  return headers;
 }
 
 async function readSettings() {
