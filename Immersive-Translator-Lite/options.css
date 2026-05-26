@@ -124,6 +124,33 @@ label.field[hidden] {
   color: var(--muted);
 }
 
+.endpoint-preview-label {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.endpoint-preview {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--input-bg), var(--muted) 7%);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.endpoint-preview.invalid {
+  border-color: #d44747;
+  color: #b83838;
+}
+
 input,
 textarea,
 select {

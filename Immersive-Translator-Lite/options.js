@@ -240,6 +240,8 @@ const I18N_TEXT = {
       connectionOk: '连接测试成功。',
       connectionFailedPrefix: '连接测试失败',
       connectionMissingConfig: '请先填写 API 端点地址、访问令牌和模型名称。',
+      connectionInvalidBaseUrl: 'API 端点地址必须是完整的 http(s) URL。',
+      connectionInvalidResponse: 'API 返回格式不符合当前 Provider。',
       configExported: '配置已导出为 JSON。',
       configImported: '配置已导入并保存。',
       configImportCanceled: '已取消导入配置。',
@@ -248,7 +250,9 @@ const I18N_TEXT = {
       configImportFailedPrefix: '导入配置失败',
       saveFailedPrefix: '保存失败',
       cacheClearFailedPrefix: '清空缓存失败',
-      initFailedPrefix: '初始化失败'
+      initFailedPrefix: '初始化失败',
+      apiEndpointPreviewLabel: '完整请求地址',
+      apiEndpointPreviewEmpty: '填写 API 端点地址后会显示自动拼接的完整请求地址。'
     },
     dialogs: {
       resetTitle: '确认重置设置',
@@ -404,6 +408,8 @@ const I18N_TEXT = {
       connectionOk: 'Connection test succeeded.',
       connectionFailedPrefix: 'Connection test failed',
       connectionMissingConfig: 'Fill in the API endpoint URL, access token, and model name first.',
+      connectionInvalidBaseUrl: 'API endpoint URL must be a full http(s) URL.',
+      connectionInvalidResponse: 'API response does not match the selected Provider.',
       configExported: 'Config exported as JSON.',
       configImported: 'Config imported and saved.',
       configImportCanceled: 'Config import canceled.',
@@ -412,7 +418,9 @@ const I18N_TEXT = {
       configImportFailedPrefix: 'Import config failed',
       saveFailedPrefix: 'Save failed',
       cacheClearFailedPrefix: 'Clear cache failed',
-      initFailedPrefix: 'Initialization failed'
+      initFailedPrefix: 'Initialization failed',
+      apiEndpointPreviewLabel: 'Full Request URL',
+      apiEndpointPreviewEmpty: 'Enter an API endpoint URL to preview the full request URL.'
     },
     dialogs: {
       resetTitle: 'Confirm Reset',
@@ -712,6 +720,7 @@ function applyI18n() {
   document.getElementById('generatePromptCacheKeyPlaceholder').textContent = text.buttons.generate;
   document.getElementById('cleanRequestCache').textContent = text.buttons.cleanCache;
   document.getElementById('testConnectionBtn').textContent = text.buttons.testConnection;
+  document.getElementById('apiEndpointPreviewLabel').textContent = text.status.apiEndpointPreviewLabel;
   document.getElementById('confirmTitle').textContent = text.dialogs.resetTitle;
   document.getElementById('confirmCancelBtn').textContent = text.buttons.cancel;
   document.getElementById('confirmOkBtn').textContent = text.buttons.confirmReset;
@@ -872,6 +881,29 @@ function setConnectionTestState(state) {
   }
 }
 
+function updateApiEndpointPreview() {
+  const preview = document.getElementById('apiEndpointPreview');
+  if (!preview) return;
+
+  const apiBaseUrl = String(document.getElementById('apiBaseUrl')?.value || '').trim();
+  const model = String(document.getElementById('model')?.value || '').trim();
+  const apiMode = document.getElementById('apiMode')?.value || DEFAULT_CONFIG_BASE.apiMode;
+  preview.classList.remove('invalid');
+
+  if (!apiBaseUrl) {
+    preview.textContent = getTextBundle().status.apiEndpointPreviewEmpty;
+    return;
+  }
+
+  try {
+    validateConnectionTestBaseUrl(apiBaseUrl);
+    preview.textContent = buildConnectionTestEndpoint(apiBaseUrl, model, apiMode);
+  } catch (error) {
+    preview.classList.add('invalid');
+    preview.textContent = String(error?.message || error);
+  }
+}
+
 function generateUuid() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -920,6 +952,7 @@ async function testConnection(config) {
     : DEFAULT_CONFIG_BASE.requestTimeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  validateConnectionTestBaseUrl(apiBaseUrl);
   const endpoint = buildConnectionTestEndpoint(apiBaseUrl, model, apiMode);
   const requestBody = buildConnectionTestRequestBody(model, apiMode, config);
   const headers = buildConnectionTestHeaders(apiKey, apiMode);
@@ -937,9 +970,22 @@ async function testConnection(config) {
       throw new Error(`API HTTP ${response.status}: ${errText.slice(0, 300)}`);
     }
 
-    await response.json().catch(() => null);
+    const json = await response.json().catch(() => null);
+    validateConnectionTestResponse(json, apiMode);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function validateConnectionTestBaseUrl(apiBaseUrl) {
+  let url = null;
+  try {
+    url = new URL(apiBaseUrl);
+  } catch {
+    throw new Error(getTextBundle().status.connectionInvalidBaseUrl);
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error(getTextBundle().status.connectionInvalidBaseUrl);
   }
 }
 
@@ -1015,6 +1061,33 @@ function buildConnectionTestHeaders(apiKey, apiMode) {
   return headers;
 }
 
+function validateConnectionTestResponse(json, apiMode) {
+  if (!json || typeof json !== 'object') {
+    throw new Error(getTextBundle().status.connectionInvalidResponse);
+  }
+
+  let isValid = false;
+  if (apiMode === 'gemini') {
+    isValid = Array.isArray(json.candidates);
+  } else if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
+    isValid =
+      Array.isArray(json.choices) &&
+      json.choices.some((choice) => {
+        const message = choice?.message;
+        return message && typeof message === 'object' && Object.prototype.hasOwnProperty.call(message, 'content');
+      });
+  } else {
+    isValid =
+      typeof json.output_text === 'string' ||
+      Array.isArray(json.output) ||
+      Object.prototype.hasOwnProperty.call(json, 'output');
+  }
+
+  if (!isValid) {
+    throw new Error(getTextBundle().status.connectionInvalidResponse);
+  }
+}
+
 async function readSettings() {
   const result = await chrome.storage.sync.get({ settings: getDefaultSettings() });
   return normalizeSettings(result.settings);
@@ -1033,6 +1106,7 @@ function populateForm(settings) {
 
   applyTheme(settings.uiTheme);
   applyApiModeVisibility(settings.translationConfig.apiMode);
+  updateApiEndpointPreview();
 }
 
 function collectFormSettings() {
@@ -1261,6 +1335,9 @@ function bindUI() {
   for (const fieldId of ['apiBaseUrl', 'apiKey', 'model']) {
     document.getElementById(fieldId).addEventListener('input', () => {
       setConnectionTestState('idle');
+      if (fieldId === 'apiBaseUrl' || fieldId === 'model') {
+        updateApiEndpointPreview();
+      }
     });
   }
   for (const fieldId of ['reasoningEffort', 'deepSeekThinkingEnabled']) {
@@ -1303,6 +1380,7 @@ function bindUI() {
   document.getElementById('apiMode').addEventListener('change', (event) => {
     applyApiModeVisibility(event.target.value);
     setConnectionTestState('idle');
+    updateApiEndpointPreview();
   });
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
