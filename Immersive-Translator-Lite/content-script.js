@@ -40,7 +40,7 @@
    */
 
   const DEFAULT_CONFIG = {
-    // API 模式，responses 使用 /responses，chat_completions 使用 /chat/completions，gemini 使用 generateContent
+    // API 模式，responses 使用 /responses，chat_completions/deepseek 使用 /chat/completions，gemini 使用 generateContent
     apiMode: 'responses',
     // API 服务地址，末尾可带或不带 /v1，脚本会自动拼接对应路径
     apiBaseUrl: 'https://api.example.com/v1',
@@ -56,6 +56,8 @@
     responseInstructions: '',
     // Gemini 模式下是否缓存 System Instructions
     geminiCacheEnabled: true,
+    // DeepSeek 模式下是否启用 thinking
+    deepSeekThinkingEnabled: true,
     // Prompt Cache 的缓存键，相同键可提升重复请求命中率
     promptCacheKey: '188f6fd3-49ea-4f63-ae50-b87cf9574a1a',
     // 占位符重排翻译专用的 Prompt Cache 缓存键
@@ -398,7 +400,7 @@
     if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
       normalized.maxRequestRetries = DEFAULT_MAX_REQUEST_RETRIES;
     }
-    if (!['responses', 'chat_completions', 'gemini'].includes(normalized.apiMode)) {
+    if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(normalized.apiMode)) {
       normalized.apiMode = DEFAULT_CONFIG.apiMode;
     }
     if (!['Alt', 'Ctrl', 'Shift', 'Meta'].includes(normalized.multipleSelectionModeHotkey)) {
@@ -1289,6 +1291,8 @@
       sourceLang: payload?.sourceLang || CONFIG.sourceLang,
       targetLang: payload?.targetLang || CONFIG.targetLang,
       responseInstructions: CONFIG.responseInstructions || '',
+      reasoningEffort: CONFIG.reasoningEffort || '',
+      deepSeekThinkingEnabled: CONFIG.deepSeekThinkingEnabled !== false,
       placeholderRules: opts.placeholderRules === true
     });
     const [segmentsHash, contextHash] = await Promise.all([sha256Hex(segmentsText), sha256Hex(contextText)]);
@@ -1748,6 +1752,28 @@
       return requestBody;
     }
 
+    if (apiMode === 'deepseek') {
+      const requestBody = {
+        model: CONFIG.model,
+        messages: buildDeepSeekMessages(prompt, instructions),
+        thinking: buildDeepSeekThinking(reasoningEffort),
+        temperature: CONFIG.temperature,
+        max_tokens: CONFIG.maxOutputTokens
+      };
+      const deepSeekReasoningEffort = !isDeepSeekThinkingEnabled(reasoningEffort)
+        ? ''
+        : buildDeepSeekReasoningEffort(reasoningEffort);
+      if (deepSeekReasoningEffort) {
+        requestBody.reasoning_effort = deepSeekReasoningEffort;
+      }
+
+      requestBody.response_format = {
+        type: outputFormat === 'json_schema' ? 'json_object' : 'text'
+      };
+
+      return requestBody;
+    }
+
     const requestBody = {
       model: CONFIG.model,
       instructions,
@@ -1785,6 +1811,39 @@
       content: extractChatCompletionsUserContent(prompt)
     });
     return messages;
+  }
+
+  function buildDeepSeekMessages(prompt, instructions) {
+    const messages = [];
+    const instructionText = String(instructions || '').trim();
+    if (instructionText) {
+      messages.push({
+        role: 'system',
+        content: instructionText
+      });
+    }
+    messages.push({
+      role: 'user',
+      content: extractChatCompletionsUserContent(prompt)
+    });
+    return messages;
+  }
+
+  function buildDeepSeekThinking(reasoningEffort) {
+    return {
+      type: isDeepSeekThinkingEnabled(reasoningEffort) ? 'enabled' : 'disabled'
+    };
+  }
+
+  function isDeepSeekThinkingEnabled(reasoningEffort) {
+    if (CONFIG.deepSeekThinkingEnabled === false) return false;
+    return String(reasoningEffort || '').trim().toLowerCase() !== 'none';
+  }
+
+  function buildDeepSeekReasoningEffort(reasoningEffort) {
+    const effort = String(reasoningEffort || '').trim().toLowerCase();
+    if (effort === 'none') return '';
+    return effort === 'max' || effort === 'xhigh' ? 'max' : 'high';
   }
 
   function extractChatCompletionsUserContent(prompt) {
@@ -1837,7 +1896,7 @@
   }
 
   function normalizeApiMode(apiMode) {
-    return ['responses', 'chat_completions', 'gemini'].includes(apiMode) ? apiMode : 'responses';
+    return ['responses', 'chat_completions', 'deepseek', 'gemini'].includes(apiMode) ? apiMode : 'responses';
   }
 
   function buildGeminiContents(prompt) {
@@ -1871,15 +1930,15 @@
   function buildGeminiThinkingConfig(reasoningEffort) {
     const effort = String(reasoningEffort || '').trim().toLowerCase();
     const levelMap = {
-      none: 'MINIMAL',
-      minimal: 'MINIMAL',
-      low: 'LOW',
-      medium: 'MEDIUM',
-      high: 'HIGH',
-      xhigh: 'HIGH'
+      none: 'minimal',
+      minimal: 'minimal',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: 'high'
     };
     return {
-      thinkingLevel: levelMap[effort] || 'MEDIUM'
+      thinkingLevel: levelMap[effort] || 'medium'
     };
   }
 
@@ -2152,7 +2211,7 @@
     if (apiMode === 'gemini') {
       return buildGeminiGenerateContentEndpoint();
     }
-    const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+    const endpointPath = apiMode === 'chat_completions' || apiMode === 'deepseek' ? 'chat/completions' : 'responses';
     return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
   }
 
@@ -2368,13 +2427,14 @@
   }
 
   function getApiModeDisplayName(apiMode) {
-    if (apiMode === 'chat_completions') return 'Chat Completions API';
+    if (apiMode === 'chat_completions') return 'OpenAI Completions API';
+    if (apiMode === 'deepseek') return 'DeepSeek API';
     if (apiMode === 'gemini') return 'Gemini API';
-    return 'Responses API';
+    return 'OpenAI Responses API';
   }
 
   function extractTranslationOutputText(json, apiMode) {
-    if (apiMode === 'chat_completions') {
+    if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
       return extractChatCompletionsOutputText(json);
     }
     if (apiMode === 'gemini') {

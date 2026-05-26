@@ -110,6 +110,7 @@ const DEFAULT_CONFIG_BASE = {
   targetLang: 'Chinese Simplified',
   responseInstructions: DEFAULT_RESPONSE_INSTRUCTIONS,
   geminiCacheEnabled: true,
+  deepSeekThinkingEnabled: true,
   promptCacheRetention: '24h',
   reasoningEffort: 'none',
   reasoningSummary: 'auto',
@@ -167,6 +168,7 @@ const FIELD_TYPES = {
   targetLang: 'string',
   responseInstructions: 'string',
   geminiCacheEnabled: 'boolean',
+  deepSeekThinkingEnabled: 'boolean',
   promptCacheKey: 'string',
   promptCacheKeyPlaceholder: 'string',
   promptCacheRetention: 'string',
@@ -281,6 +283,7 @@ const I18N_TEXT = {
       reasoningEffort: '推理强度',
       reasoningSummary: '推理摘要级别',
       geminiCacheEnabled: 'Gemini 缓存',
+      deepSeekThinkingEnabled: 'DeepSeek 思考模式',
       promptCacheKey: '提示词缓存键（普通模式）',
       promptCacheKeyPlaceholder: '提示词缓存键（占位符模式）',
       promptCacheRetention: '缓存保留时长',
@@ -306,6 +309,7 @@ const I18N_TEXT = {
       multipleSelectionMergeRequest: '松开多选键后将已选块合并翻译请求',
       requestCacheEnabled: '开启请求结果缓存',
       geminiCacheEnabled: '启用 Gemini System Instructions 缓存',
+      deepSeekThinkingEnabled: '启用 DeepSeek thinking',
       enableTouchShortcuts: '双击进入、三指取消',
       threeFingerCancelEnabled: '三指触控取消选择模式',
       notifyOnDuplicateSelection: '重复选中时提示',
@@ -325,6 +329,7 @@ const I18N_TEXT = {
       apiMode: {
         responses: 'OpenAI Responses',
         chat_completions: 'OpenAI Completions',
+        deepseek: 'DeepSeek',
         gemini: 'Gemini'
       },
       selectionMode: {
@@ -347,6 +352,7 @@ const I18N_TEXT = {
         low: 'low（低）',
         medium: 'medium（中）',
         high: 'high（高）',
+        max: 'max（最高）',
         xhigh: 'xhigh（极高）'
       },
       reasoningSummary: {
@@ -440,6 +446,7 @@ const I18N_TEXT = {
       reasoningEffort: 'Reasoning Effort',
       reasoningSummary: 'Reasoning Summary Level',
       geminiCacheEnabled: 'Gemini Cache',
+      deepSeekThinkingEnabled: 'DeepSeek Thinking',
       promptCacheKey: 'Prompt Cache Key (Normal Mode)',
       promptCacheKeyPlaceholder: 'Prompt Cache Key (Placeholder Mode)',
       promptCacheRetention: 'Cache Retention Duration',
@@ -465,6 +472,7 @@ const I18N_TEXT = {
       multipleSelectionMergeRequest: 'Merge selected blocks into one translation dispatch on key release',
       requestCacheEnabled: 'Enable request result cache',
       geminiCacheEnabled: 'Enable Gemini System Instructions cache',
+      deepSeekThinkingEnabled: 'Enable DeepSeek thinking',
       enableTouchShortcuts: 'Double-tap to enter, three-finger to cancel',
       threeFingerCancelEnabled: 'Allow three-finger touch to cancel selection mode',
       notifyOnDuplicateSelection: 'Show warning for duplicate selections',
@@ -484,6 +492,7 @@ const I18N_TEXT = {
       apiMode: {
         responses: 'OpenAI Responses',
         chat_completions: 'OpenAI Completions',
+        deepseek: 'DeepSeek',
         gemini: 'Gemini'
       },
       selectionMode: {
@@ -506,6 +515,7 @@ const I18N_TEXT = {
         low: 'low',
         medium: 'medium',
         high: 'high',
+        max: 'max',
         xhigh: 'xhigh'
       },
       reasoningSummary: {
@@ -523,6 +533,10 @@ const I18N_TEXT = {
 
 let currentLocale = 'zh';
 let isApiKeyVisible = false;
+
+const OPENAI_REASONING_EFFORT_VALUES = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const GEMINI_REASONING_EFFORT_VALUES = ['minimal', 'low', 'medium', 'high'];
+const DEEPSEEK_REASONING_EFFORT_VALUES = ['high', 'max'];
 
 function normalizeValueByType(rawValue, defaultValue, type) {
   if (type === 'boolean') {
@@ -558,7 +572,7 @@ function normalizeSettings(input) {
   if (!['auto', 'concise', 'detailed'].includes(result.translationConfig.reasoningSummary)) {
     result.translationConfig.reasoningSummary = defaults.reasoningSummary;
   }
-  if (!['responses', 'chat_completions', 'gemini'].includes(result.translationConfig.apiMode)) {
+  if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(result.translationConfig.apiMode)) {
     result.translationConfig.apiMode = defaults.apiMode;
   }
   if (!['in_memory', '24h'].includes(result.translationConfig.promptCacheRetention)) {
@@ -638,6 +652,36 @@ function applySelectOptionTexts(selectId, optionMap) {
   }
 }
 
+function getReasoningEffortValuesForApiMode(apiMode) {
+  if (apiMode === 'deepseek') return DEEPSEEK_REASONING_EFFORT_VALUES;
+  if (apiMode === 'gemini') return GEMINI_REASONING_EFFORT_VALUES;
+  return OPENAI_REASONING_EFFORT_VALUES;
+}
+
+function getDefaultReasoningEffortForApiMode(apiMode) {
+  if (apiMode === 'deepseek') return 'high';
+  if (apiMode === 'gemini') return 'medium';
+  return DEFAULT_CONFIG_BASE.reasoningEffort;
+}
+
+function applyReasoningEffortOptions(apiMode, preferredValue) {
+  const select = document.getElementById('reasoningEffort');
+  if (!select) return;
+
+  const values = getReasoningEffortValuesForApiMode(apiMode);
+  const labels = getTextBundle().options.reasoningEffort;
+  const currentValue = preferredValue ?? select.value;
+  select.replaceChildren(
+    ...values.map((value) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = labels[value] || value;
+      return option;
+    })
+  );
+  select.value = values.includes(currentValue) ? currentValue : getDefaultReasoningEffortForApiMode(apiMode);
+}
+
 function applyI18n() {
   const text = getTextBundle();
   document.documentElement.lang = text.htmlLang;
@@ -686,7 +730,7 @@ function applyI18n() {
   applySelectOptionTexts('selectionMode', text.options.selectionMode);
   applySelectOptionTexts('multipleSelectionModeHotkey', text.options.multipleSelectionModeHotkey);
   applySelectOptionTexts('outputFormat', text.options.outputFormat);
-  applySelectOptionTexts('reasoningEffort', text.options.reasoningEffort);
+  applyReasoningEffortOptions(document.getElementById('apiMode')?.value || DEFAULT_CONFIG_BASE.apiMode);
   applySelectOptionTexts('reasoningSummary', text.options.reasoningSummary);
   applySelectOptionTexts('promptCacheRetention', text.options.promptCacheRetention);
 }
@@ -755,11 +799,21 @@ function applyTheme(themeMode) {
 }
 
 function applyApiModeVisibility(apiMode) {
+  applyReasoningEffortOptions(apiMode);
   const isChatCompletions = apiMode === 'chat_completions';
+  const isDeepSeek = apiMode === 'deepseek';
   const isGemini = apiMode === 'gemini';
+  const isDeepSeekThinkingOff =
+    isDeepSeek && document.getElementById('deepSeekThinkingEnabled')?.checked === false;
+
+  const reasoningEffortFields = document.querySelectorAll('[data-reasoning-effort-field="true"]');
+  for (const field of reasoningEffortFields) {
+    field.hidden = isDeepSeekThinkingOff;
+  }
+
   const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
   for (const field of responsesOnlyFields) {
-    field.hidden = isChatCompletions || isGemini;
+    field.hidden = isChatCompletions || isDeepSeek || isGemini;
   }
 
   const geminiOnlyFields = document.querySelectorAll('[data-gemini-only="true"]');
@@ -767,9 +821,19 @@ function applyApiModeVisibility(apiMode) {
     field.hidden = !isGemini;
   }
 
-  const geminiHiddenFields = document.querySelectorAll('[data-gemini-hidden="true"]');
-  for (const field of geminiHiddenFields) {
-    field.hidden = isGemini;
+  const deepSeekOnlyFields = document.querySelectorAll('[data-deepseek-only="true"]');
+  for (const field of deepSeekOnlyFields) {
+    field.hidden = !isDeepSeek;
+  }
+
+  const noPromptCacheFields = document.querySelectorAll('[data-no-prompt-cache="true"]');
+  for (const field of noPromptCacheFields) {
+    field.hidden = isGemini || isDeepSeek;
+  }
+
+  const deepSeekHiddenFields = document.querySelectorAll('[data-deepseek-hidden="true"]');
+  for (const field of deepSeekHiddenFields) {
+    field.hidden = isDeepSeek;
   }
 }
 
@@ -835,7 +899,7 @@ async function testConnection(config) {
   const apiBaseUrl = String(config.apiBaseUrl || '').trim();
   const apiKey = String(config.apiKey || '').trim();
   const model = String(config.model || '').trim();
-  const apiMode = ['responses', 'chat_completions', 'gemini'].includes(config.apiMode) ? config.apiMode : 'responses';
+  const apiMode = ['responses', 'chat_completions', 'deepseek', 'gemini'].includes(config.apiMode) ? config.apiMode : 'responses';
 
   if (!apiBaseUrl || !apiKey || !model) {
     throw new Error(getTextBundle().status.connectionMissingConfig);
@@ -847,7 +911,7 @@ async function testConnection(config) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const endpoint = buildConnectionTestEndpoint(apiBaseUrl, model, apiMode);
-  const requestBody = buildConnectionTestRequestBody(model, apiMode);
+  const requestBody = buildConnectionTestRequestBody(model, apiMode, config);
   const headers = buildConnectionTestHeaders(apiKey, apiMode);
 
   try {
@@ -874,7 +938,7 @@ function buildConnectionTestEndpoint(apiBaseUrl, model, apiMode) {
   if (apiMode === 'gemini') {
     return `${baseUrl}/${formatGeminiModelPath(model)}:generateContent`;
   }
-  const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+  const endpointPath = apiMode === 'chat_completions' || apiMode === 'deepseek' ? 'chat/completions' : 'responses';
   return `${baseUrl}/${endpointPath}`;
 }
 
@@ -883,7 +947,7 @@ function formatGeminiModelPath(model) {
   return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
 }
 
-function buildConnectionTestRequestBody(model, apiMode) {
+function buildConnectionTestRequestBody(model, apiMode, config) {
   if (apiMode === 'gemini') {
     return {
       contents: [
@@ -898,8 +962,8 @@ function buildConnectionTestRequestBody(model, apiMode) {
     };
   }
 
-  if (apiMode === 'chat_completions') {
-    return {
+  if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
+    const requestBody = {
       model,
       messages: [
         {
@@ -907,8 +971,19 @@ function buildConnectionTestRequestBody(model, apiMode) {
           content: 'ping'
         }
       ],
-      max_completion_tokens: 16
+      ...(apiMode === 'deepseek' ? { max_tokens: 16 } : { max_completion_tokens: 16 })
     };
+    if (apiMode === 'deepseek') {
+      const reasoningEffort = String(config?.reasoningEffort || '').trim().toLowerCase();
+      const thinkingEnabled = config?.deepSeekThinkingEnabled !== false && reasoningEffort !== 'none';
+      requestBody.thinking = {
+        type: thinkingEnabled ? 'enabled' : 'disabled'
+      };
+      if (thinkingEnabled) {
+        requestBody.reasoning_effort = reasoningEffort === 'max' || reasoningEffort === 'xhigh' ? 'max' : 'high';
+      }
+    }
+    return requestBody;
   }
 
   return {
@@ -944,6 +1019,7 @@ function populateForm(settings) {
     if (!field) continue;
     setFieldValue(field, settings.translationConfig[key], type);
   }
+  applyReasoningEffortOptions(settings.translationConfig.apiMode, settings.translationConfig.reasoningEffort);
 
   applyTheme(settings.uiTheme);
   applyApiModeVisibility(settings.translationConfig.apiMode);
@@ -1174,6 +1250,12 @@ function bindUI() {
 
   for (const fieldId of ['apiBaseUrl', 'apiKey', 'model']) {
     document.getElementById(fieldId).addEventListener('input', () => {
+      setConnectionTestState('idle');
+    });
+  }
+  for (const fieldId of ['reasoningEffort', 'deepSeekThinkingEnabled']) {
+    document.getElementById(fieldId).addEventListener('change', () => {
+      applyApiModeVisibility(document.getElementById('apiMode').value);
       setConnectionTestState('idle');
     });
   }

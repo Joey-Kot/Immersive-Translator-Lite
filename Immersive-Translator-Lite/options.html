@@ -50,6 +50,7 @@
                 <select id="apiMode">
                   <option value="responses">OpenAI Responses</option>
                   <option value="chat_completions">OpenAI Completions</option>
+                  <option value="deepseek">DeepSeek</option>
                   <option value="gemini">Gemini</option>
                 </select>
               </label>
@@ -108,7 +109,16 @@
                 <input id="temperature" type="number" step="0.1" />
               </label>
 
-              <label class="field">
+              <label class="field switch-field" data-deepseek-only="true">
+                <span class="label">DeepSeek 思考模式</span>
+                <span class="switch-wrap">
+                  <input id="deepSeekThinkingEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">启用 DeepSeek thinking</span>
+                </span>
+              </label>
+
+              <label class="field" data-reasoning-effort-field="true">
                 <span class="label">推理强度</span>
                 <select id="reasoningEffort">
                   <option value="none">none（关闭）</option>
@@ -146,7 +156,7 @@
                 </span>
               </label>
 
-              <label class="field">
+              <label class="field" data-deepseek-hidden="true">
                 <span class="label">缓存保留时长</span>
                 <select id="promptCacheRetention">
                   <option value="in_memory">in_memory</option>
@@ -154,7 +164,7 @@
                 </select>
               </label>
 
-              <label class="field" data-gemini-hidden="true">
+              <label class="field" data-no-prompt-cache="true">
                 <span class="label">提示词缓存键（普通模式）</span>
                 <div class="password-row">
                   <input id="promptCacheKey" type="text" />
@@ -162,7 +172,7 @@
                 </div>
               </label>
 
-              <label class="field" data-gemini-hidden="true">
+              <label class="field" data-no-prompt-cache="true">
                 <span class="label">提示词缓存键（占位符模式）</span>
                 <div class="password-row">
                   <input id="promptCacheKeyPlaceholder" type="text" />
