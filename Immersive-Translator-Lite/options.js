@@ -261,7 +261,7 @@ const I18N_TEXT = {
     labels: {
       enabled: '插件开关',
       uiTheme: '主题',
-      apiMode: 'API 模式',
+      apiMode: 'API Provider',
       injectIntoIframes: '在 iframe 中生效',
       apiBaseUrl: 'API 端点地址',
       apiKey: '访问令牌',
@@ -425,7 +425,7 @@ const I18N_TEXT = {
     labels: {
       enabled: 'Extension Enable',
       uiTheme: 'Theme',
-      apiMode: 'API Mode',
+      apiMode: 'API Provider',
       injectIntoIframes: 'Enable in iFrames',
       apiBaseUrl: 'API Endpoint URL',
       apiKey: 'Access Token',

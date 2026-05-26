@@ -1,14 +1,44 @@
 # Immersive Translator Lite
 
-一个轻量的沉浸式网页翻译工具，支持 **UserScript** 和 **Chrome Extension** 两种形态。核心目标是：
+一个轻量的沉浸式网页翻译工具，支持 **Chrome Extension** 和 **UserScript** 两种形态。
 
-- 尽量不破坏原页面结构
-- 在页面内就地切换原文/译文
-- 基于 OpenAI Responses API 做可控、可校验的翻译
+当前主线是 Chrome 插件版：配置完整、Provider 支持更丰富，包含缓存、批处理、连通性测试、导入导出等功能。UserScript 版本保留为轻量方案，适合简单场景或不方便安装插件时使用。
 
-## 1. 设计思路
+## 1. 支持功能及特性
 
-### 1.1 特性及优点
+### 1.1 Chrome 插件版
+
+Chrome 插件版是目前推荐使用的版本，主要支持：
+
+- **多 Provider 支持**：可在设置页选择 `OpenAI Responses`、`OpenAI Completions`、`Gemini`、`DeepSeek`。
+- **完整设置页**：按 `System / Language / API / Request / Hotkey / Debug` 分组管理配置。
+- **连接测试**：可在模型配置旁直接测试 API 连通性，成功后显示绿色勾选状态。
+- **配置导入导出**：支持 JSON 格式导入/导出配置；导入前会二次确认，避免误覆盖当前配置。
+- **块级按需翻译**：进入选择模式后，点击页面块即可就地翻译，不需要整页盲翻。
+- **原文/译文切换**：已翻译区域再次点击可在原文和译文之间切换。
+- **多选批处理**：按住多选修饰键连续选择多个 DOM 块，松开后统一发起翻译。
+- **分批与并发控制**：可配置单次请求最大分段数、API 并发请求数、请求超时与最大重试次数。
+- **请求结果缓存**：可缓存分批翻译结果，重复翻译相同内容时减少 API 请求。
+- **Provider 缓存能力**：OpenAI 支持 Prompt Cache 相关配置；Gemini 支持独立的 System Instructions 缓存开关。
+- **结构化输出与自动降级**：默认使用结构化输出提升稳定性，不兼容时可自动降级重试。
+- **复杂 DOM 兼容**：对 custom elements 和高风险重排块自动启用 fallback，降低页面结构错位概率。
+- **移动端手势**：支持双击进入选择模式、三指取消。
+- **调试能力**：可分别开启流程日志、请求日志、响应日志、热键日志和重排日志。
+- **按钮点击反馈**：设置页按钮带点击反馈，避免操作时没有感知。
+
+### 1.2 UserScript 版本
+
+UserScript 版本功能更轻，主要用于基础翻译场景：
+
+- 仅支持 `OpenAI Responses` 这个 Provider。
+- 不包含插件版完整设置页和部分高级配置。
+- 与插件版相比，Provider 选择、连接测试、配置导入导出、Gemini/DeepSeek 支持、部分缓存与调试能力都不完整。
+
+如果你希望获得完整体验，建议优先使用 Chrome 插件版。
+
+## 2. 设计思路
+
+### 2.1 特性及优点
 
 - **块级翻译、按需请求**：选中哪个块就翻译哪个块，避免整页盲翻带来的噪声和开销。
 - **结构稳定**：主路径采用“克隆替换 + 原文保留”，尽量减少对原始 DOM 的侵入。
@@ -21,17 +51,17 @@
 - **移动端可用**：支持双击进入选择模式、三指取消，兼顾触屏场景。
 - **多选批处理**：支持按住修饰键连续选择多个 DOM 块，松开后统一发起翻译（可配置为合并请求或并行逐块请求）。
 
-### 1.2 为什么这样设计
+### 2.2 为什么这样设计
 
 - **可回退**：翻译结果与原文共存，用户可随时切回原文，失败时也便于恢复。
 - **映射正确**：文本提取时记录 `id + path`，回填时按路径定位，减少“译文串位”。
-- **接口兼容**：默认走 `json_schema` 结构化输出；端点不支持时可自动降级重试。
-- **性能可控**：超出 `maxSegmentsPerRequest` 自动拆分并发，提升长块翻译稳定性。
+- **接口兼容**：默认走结构化输出；端点不支持时可自动降级重试。
+- **性能可控**：超出 `maxSegmentsPerRequest` 自动拆分，并可通过 `maxConcurrentRequests` 控制并发数量。
 - **重复请求可削减**：请求缓存基于 `segments + model + 语言方向 + 指令 + placeholder` 生成键，避免同请求重复请求。
 - **缓存收益可持续**：请求前缀尽量保持稳定且足够长，便于命中 Prompt Cache。
 - **调试效率**：把日志按热键/流程/reorder/请求/响应拆分，按需开启，不强制污染控制台。
 
-### 1.3 核心流程与实现方式
+### 2.3 核心流程与实现方式
 
 1. **进入与退出选择模式**
 - 键盘热键默认 `Alt+KeyA` 进入/退出。
@@ -45,8 +75,8 @@
 - 为每段文本生成 `seg_x`，并记录到根节点的 `path`，用于后续精确替换。
 
 3. **翻译请求与结果校验**
-- 按配置构建 Responses API 请求，默认结构化输出。
-- 分段超阈值时自动分批并发，再合并校验。
+- 按配置构建对应 Provider 的请求，默认结构化输出。
+- 分段超阈值时自动分批，并按配置的并发上限执行，再合并校验。
 - 当命中内联占位符重排场景时，会在主翻译（`main translation`）之后追加一次重排增强请求（`reorder translation`）。这是设计内的双阶段链路：前者负责基线译文，后者用于优化带链接/强调等内联标签的语序，并非重复请求。
 - 校验项包括：长度一致、`id` 完整、不重复、顺序可重建。
 - 可开启请求结果缓存：命中时直接复用缓存译文，未命中才发起请求；缓存项按 TTL（小时）自动过期。
@@ -63,13 +93,13 @@
 
 ---
 
-## 2. 安装方式
+## 3. 安装方式
 
-### 2.1 Chrome Web Store 安装（推荐）
+### 3.1 Chrome Web Store 安装（推荐）
 
 - 商店地址：<https://chromewebstore.google.com/detail/immersive-translator-lite/mohbgokiimlhljckgcgidegkalglnlek>
 
-### 2.2 Chrome 扩展安装（开发者模式）
+### 3.2 Chrome 扩展安装（开发者模式）
 
 1. 打开 `chrome://extensions`。
 2. 右上角开启“开发者模式（Developer mode）”。
@@ -79,7 +109,7 @@
 
 说明：扩展设置页已按 `System / Language / API / Request / Hotkey / Debug` 分组，便于快速定位配置项。
 
-### 2.3 UserScript 安装
+### 3.3 UserScript 安装
 
 支持任何兼容 UserScript 的扩展，常见包括：
 
@@ -92,11 +122,13 @@
 
 1. 浏览器安装任一脚本管理器扩展。
 2. 新建脚本。
-3. 将 `lite_immersive_translation.js` 全量粘贴后保存。
+3. 将 `Tampermonkey/lite_immersive_translation.js` 全量粘贴后保存。
 4. 配置 API 参数并启用脚本。
 5. 刷新目标网页。
 
-### 2.4 匹配范围
+说明：UserScript 版本仅支持 `OpenAI Responses`，功能覆盖不如 Chrome 插件版完整。
+
+### 3.4 匹配范围
 
 默认是全站匹配：
 
@@ -107,15 +139,22 @@
 
 ---
 
-## 3. 使用方式
+## 4. 使用方式
 
-### 3.1 首次配置
+### 4.1 首次配置
 
 至少配置以下 3 项：
 
 - `apiBaseUrl`
 - `apiKey`
 - `model`
+
+Chrome 插件版还可以在设置页选择 `API Provider`，当前支持：
+
+- `OpenAI Responses`
+- `OpenAI Completions`
+- `Gemini`
+- `DeepSeek`
 
 推荐最小配置示例：
 
@@ -133,11 +172,11 @@ const CONFIG = {
 };
 ```
 
-### 3.2 快捷键与手势
+### 4.2 快捷键与手势
 
 默认快捷操作：
 
-- `Alt+KeyA` 或 点击插件图标：进入/退出选择模式
+- `Alt+KeyA` 或点击插件图标：进入/退出选择模式
 - `Esc`、右键或 `Ctrl+左键`：退出选择模式
 - 按住多选键（默认 `Alt`）并连续点击多个块：加入批量选择
 - 松开多选键：触发批量翻译（可配置为合并请求）
@@ -147,17 +186,18 @@ const CONFIG = {
 - 双击：进入/退出选择模式
 - 三指触控：取消选择模式
 
-### 3.3 典型使用流程
+### 4.3 典型使用流程
 
 1. 进入选择模式。
 2. 点击需要翻译的页面块。
 3. 等待右下角 Toast 显示 `Translated N segment(s).`。
 4. 再次点击同一区域，在原文/译文之间切换。
 
-### 3.4 常用配置项说明
+### 4.4 常用配置项说明
 
 高频项：
 
+- `apiMode`：内部配置字段，对应设置页的 `API Provider`。
 - `targetLang`：目标语言（如 `Chinese Simplified`）。
 - `responseInstructions`：额外系统翻译要求；留空时使用默认规则。
 - `selectionMode`：
@@ -169,6 +209,7 @@ const CONFIG = {
 - `notifyOnDuplicateSelection`：重复选中同一正在翻译块时是否提示。
 - `requestTimeoutMs`：单次请求超时毫秒。
 - `maxSegmentsPerRequest`：单次请求最多携带的段数，超限会自动分批。
+- `maxConcurrentRequests`：分批后最多同时发起的 API 请求数，默认 `10`。
 - `maxRequestRetries`：单个请求失败后的最大重试次数（默认 `3`）。仅对可恢复错误触发指数退避重试（如超时、`429`、`5xx`、解析失败、`Segment length mismatch` 等）。
 - `requestCacheEnabled`：是否启用请求结果缓存。
 - `requestCacheTimeoutHours`：请求缓存过期时间（小时）。
@@ -189,57 +230,58 @@ const CONFIG = {
 
 ---
 
-## 4. 注意事项
+## 5. 注意事项
 
 - 必须配置 `apiKey`，否则请求前会直接报错。
-- 若接口不兼容 `text.format`，建议保持 `structuredOutputAutoFallback: true`。
+- 若接口不兼容结构化输出，建议保持 `structuredOutputAutoFallback: true`。
 - 页面动态更新频繁时，建议先在小范围块上验证效果。
 - 遇到强交互区域可再次点击切回原文，再调整选择范围重试。
+- UserScript 版本仅支持 `OpenAI Responses`，如需多 Provider 和完整设置能力，请使用 Chrome 插件版。
 
 ---
 
-## 5. 故障排查
+## 6. 故障排查
 
-### 5.1 按快捷键没反应
+### 6.1 按快捷键没反应
 
 - 检查脚本/扩展是否启用。
 - 检查热键是否被系统或浏览器占用。
 - 尝试改成 `Ctrl+Shift+KeyA` 等组合。
 
-### 5.2 提示 `CONFIG.apiKey is empty`
+### 6.2 提示 `CONFIG.apiKey is empty`
 
 - 在配置中填入有效 Bearer Token。
 
-### 5.3 提示 HTTP 4xx/5xx
+### 6.3 提示 HTTP 4xx/5xx
 
 - 检查 `apiBaseUrl` 是否可达。
 - 检查模型名与接口权限。
 - 打开控制台查看具体错误体。
 - `400/401/403/404` 默认不会重试；`429/5xx` 会按 `maxRequestRetries` 进行指数退避重试。
 
-### 5.4 译文结构异常
+### 6.4 译文结构异常
 
 - 优先使用 `outputFormat: 'json_schema'`。
 - 保持 `temperature: 0`。
 - 确认 `structuredOutputAutoFallback` 已开启。
 
-### 5.5 custom element 页面显示异常
+### 6.5 custom element 页面显示异常
 
 - 当前已内置 `inline fallback`，会在检测到 custom elements 时自动启用。
 - 若仍异常，建议先开启 `debugProcessLog` 和 `debugResponseLog`，再复现并查看控制台日志定位问题。
 
-### 5.6 多选后未触发翻译
+### 6.6 多选后未触发翻译
 
 - 确认 `multipleSelectionMode` 已开启。
 - 确认当前按下的是配置中的 `multipleSelectionModeHotkey`。
 - 部分系统会拦截 `Alt/Meta`，可改为 `Ctrl` 或 `Shift` 再测试。
 
-### 5.7 请求缓存相关疑问
+### 6.7 请求缓存相关疑问
 
 - 修改了提示词、模型、源/目标语言后，缓存键会变化，旧缓存不会命中，属于预期行为。
 - 如需立即回源重译，可在选项页点击“清空请求缓存”。
 
-### 5.8 看起来有“两次请求”是否正常
+### 6.8 看起来有“两次请求”是否正常
 
 - 若当前选中块提取到了 `reorder` 片段，链路会先发一次主翻译请求，再发一次 `reorder` 增强请求。
 - 两次请求的输入并不相同：主翻译针对文本节点分段，`reorder` 针对带占位符的块级片段。
