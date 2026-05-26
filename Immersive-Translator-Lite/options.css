@@ -301,6 +301,26 @@ button:disabled {
   color: var(--muted);
 }
 
+.neutral {
+  border: 1px solid #aeb4c0;
+  background: #d9dde5;
+  color: #3f4652;
+}
+
+.neutral:hover:not(:disabled) {
+  background: #cdd2dc;
+}
+
+:root[data-theme='dark'] .neutral {
+  border-color: #515a68;
+  background: #353c48;
+  color: #d5dae3;
+}
+
+:root[data-theme='dark'] .neutral:hover:not(:disabled) {
+  background: #404858;
+}
+
 .success-soft {
   border: 1px solid #9bcfa3;
   background: #e7f6ea;

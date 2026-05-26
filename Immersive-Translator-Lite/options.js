@@ -217,10 +217,13 @@ const I18N_TEXT = {
       cleanCache: '清空缓存',
       testConnection: '测试连接',
       testingConnection: '测试中',
+      importConfig: '导入配置',
+      exportConfig: '导出配置',
       show: '显示',
       hide: '隐藏',
       cancel: '取消',
-      confirmReset: '确认重置'
+      confirmReset: '确认重置',
+      confirmImport: '确认导入'
     },
     status: {
       saved: '设置已保存。',
@@ -229,6 +232,12 @@ const I18N_TEXT = {
       connectionOk: '连接测试成功。',
       connectionFailedPrefix: '连接测试失败',
       connectionMissingConfig: '请先填写 API 端点地址、访问令牌和模型名称。',
+      configExported: '配置已导出为 JSON。',
+      configImported: '配置已导入并保存。',
+      configImportCanceled: '已取消导入配置。',
+      configImportInvalid: '配置文件不是有效的 JSON 设置。',
+      configExportFailedPrefix: '导出配置失败',
+      configImportFailedPrefix: '导入配置失败',
       saveFailedPrefix: '保存失败',
       cacheClearFailedPrefix: '清空缓存失败',
       initFailedPrefix: '初始化失败'
@@ -237,7 +246,9 @@ const I18N_TEXT = {
       resetTitle: '确认重置设置',
       resetConfirm: '确定要将所有配置重置为默认值吗？此操作会立即覆盖当前设置。',
       cleanCacheTitle: '确认清空缓存',
-      cleanCacheConfirm: '确定要清空请求缓存吗？此操作会删除所有已缓存翻译结果。'
+      cleanCacheConfirm: '确定要清空请求缓存吗？此操作会删除所有已缓存翻译结果。',
+      importTitle: '确认导入配置',
+      importConfirm: '导入 JSON 配置会覆盖当前所有配置。确定要继续吗？'
     },
     labels: {
       enabled: '插件开关',
@@ -357,10 +368,13 @@ const I18N_TEXT = {
       cleanCache: 'Clean Cache',
       testConnection: 'Test Connection',
       testingConnection: 'Testing',
+      importConfig: 'Import Config',
+      exportConfig: 'Export Config',
       show: 'Show',
       hide: 'Hide',
       cancel: 'Cancel',
-      confirmReset: 'Reset Now'
+      confirmReset: 'Reset Now',
+      confirmImport: 'Import Now'
     },
     status: {
       saved: 'Settings saved.',
@@ -369,6 +383,12 @@ const I18N_TEXT = {
       connectionOk: 'Connection test succeeded.',
       connectionFailedPrefix: 'Connection test failed',
       connectionMissingConfig: 'Fill in the API endpoint URL, access token, and model name first.',
+      configExported: 'Config exported as JSON.',
+      configImported: 'Config imported and saved.',
+      configImportCanceled: 'Config import canceled.',
+      configImportInvalid: 'The selected file is not valid JSON settings.',
+      configExportFailedPrefix: 'Export config failed',
+      configImportFailedPrefix: 'Import config failed',
       saveFailedPrefix: 'Save failed',
       cacheClearFailedPrefix: 'Clear cache failed',
       initFailedPrefix: 'Initialization failed'
@@ -377,7 +397,9 @@ const I18N_TEXT = {
       resetTitle: 'Confirm Reset',
       resetConfirm: 'Reset all settings to defaults? This will immediately overwrite current settings.',
       cleanCacheTitle: 'Confirm Cache Clear',
-      cleanCacheConfirm: 'Clear request cache now? This will remove all cached translation results.'
+      cleanCacheConfirm: 'Clear request cache now? This will remove all cached translation results.',
+      importTitle: 'Confirm Import',
+      importConfirm: 'Importing JSON config will overwrite all current settings. Continue?'
     },
     labels: {
       enabled: 'Extension Enable',
@@ -607,6 +629,8 @@ function applyI18n() {
   document.getElementById('groupTitleDebug').textContent = text.sectionTitles.debug;
   document.getElementById('saveBtn').textContent = text.buttons.save;
   document.getElementById('resetBtn').textContent = text.buttons.reset;
+  document.getElementById('importConfigBtn').textContent = text.buttons.importConfig;
+  document.getElementById('exportConfigBtn').textContent = text.buttons.exportConfig;
   document.getElementById('generatePromptCacheKey').textContent = text.buttons.generate;
   document.getElementById('generatePromptCacheKeyPlaceholder').textContent = text.buttons.generate;
   document.getElementById('cleanRequestCache').textContent = text.buttons.cleanCache;
@@ -643,7 +667,7 @@ function applyI18n() {
   applySelectOptionTexts('promptCacheRetention', text.options.promptCacheRetention);
 }
 
-function openConfirmDialog(message, titleText) {
+function openConfirmDialog(message, titleText, okText) {
   const overlay = document.getElementById('confirmOverlay');
   const titleEl = document.getElementById('confirmTitle');
   const messageEl = document.getElementById('confirmMessage');
@@ -652,6 +676,7 @@ function openConfirmDialog(message, titleText) {
 
   titleEl.textContent = titleText || getTextBundle().dialogs.resetTitle;
   messageEl.textContent = message;
+  okBtn.textContent = okText || getTextBundle().buttons.confirmReset;
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
   okBtn.focus();
@@ -841,6 +866,80 @@ function collectFormSettings() {
   return normalizeSettings(settings);
 }
 
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeImportedSettings(input) {
+  if (!isObjectRecord(input)) {
+    throw new Error(getTextBundle().status.configImportInvalid);
+  }
+
+  if (isObjectRecord(input.translationConfig)) {
+    return normalizeSettings(input);
+  }
+
+  const hasTranslationConfigFields = Object.keys(FIELD_TYPES).some((key) =>
+    Object.prototype.hasOwnProperty.call(input, key)
+  );
+  if (hasTranslationConfigFields) {
+    const currentSettings = collectFormSettings();
+    return normalizeSettings({
+      ...currentSettings,
+      translationConfig: {
+        ...currentSettings.translationConfig,
+        ...input
+      }
+    });
+  }
+
+  throw new Error(getTextBundle().status.configImportInvalid);
+}
+
+function getConfigExportFileName() {
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  return `immersive-translator-lite-config-${timestamp}.json`;
+}
+
+function exportConfig() {
+  const settings = collectFormSettings();
+  const blob = new Blob([`${JSON.stringify(settings, null, 2)}\n`], {
+    type: 'application/json'
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = getConfigExportFileName();
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  showStatus(getTextBundle().status.configExported, false);
+}
+
+async function persistImportedSettings(settings) {
+  await chrome.storage.sync.set({ settings });
+  populateForm(settings);
+  setConnectionTestState('idle');
+  showStatus(getTextBundle().status.configImported, false);
+  await chrome.runtime.sendMessage({
+    type: MESSAGE_TYPES.SETTINGS_UPDATED,
+    settings
+  }).catch(() => {});
+}
+
+async function importConfigFromFile(file) {
+  if (!file) {
+    showStatus(getTextBundle().status.configImportCanceled, false);
+    return;
+  }
+
+  const text = await file.text();
+  const parsed = JSON.parse(text);
+  const settings = normalizeImportedSettings(parsed);
+  await persistImportedSettings(settings);
+}
+
 async function saveSettings() {
   const settings = collectFormSettings();
   await chrome.storage.sync.set({ settings });
@@ -891,6 +990,44 @@ function bindUI() {
     } catch (error) {
       console.error('[LIT Options] reset failed:', error);
       showStatus(`${getTextBundle().status.saveFailedPrefix}: ${String(error?.message || error)}`, true);
+    }
+  });
+
+  document.getElementById('importConfigBtn').addEventListener('click', async () => {
+    const text = getTextBundle();
+    const confirmed = await openConfirmDialog(
+      text.dialogs.importConfirm,
+      text.dialogs.importTitle,
+      text.buttons.confirmImport
+    );
+    if (!confirmed) {
+      return;
+    }
+    document.getElementById('importConfigInput').click();
+  });
+
+  document.getElementById('importConfigInput').addEventListener('change', async (event) => {
+    const input = event.target;
+    const file = input.files?.[0] || null;
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    try {
+      await importConfigFromFile(file);
+    } catch (error) {
+      console.error('[LIT Options] import config failed:', error);
+      showStatus(`${getTextBundle().status.configImportFailedPrefix}: ${String(error?.message || error)}`, true);
+    }
+  });
+
+  document.getElementById('exportConfigBtn').addEventListener('click', () => {
+    try {
+      exportConfig();
+    } catch (error) {
+      console.error('[LIT Options] export config failed:', error);
+      showStatus(`${getTextBundle().status.configExportFailedPrefix}: ${String(error?.message || error)}`, true);
     }
   });
 
