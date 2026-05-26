@@ -102,6 +102,7 @@ const DEFAULT_RESPONSE_INSTRUCTIONS = [
 ].join('\n');
 
 const DEFAULT_CONFIG_BASE = {
+  apiMode: 'responses',
   apiBaseUrl: 'https://api.example.com/v1',
   apiKey: 'sk-xxx',
   model: 'gpt-5.1',
@@ -157,6 +158,7 @@ function getDefaultSettings() {
 }
 
 const FIELD_TYPES = {
+  apiMode: 'string',
   apiBaseUrl: 'string',
   apiKey: 'string',
   model: 'string',
@@ -253,6 +255,7 @@ const I18N_TEXT = {
     labels: {
       enabled: '插件开关',
       uiTheme: '主题',
+      apiMode: 'API 模式',
       injectIntoIframes: '在 iframe 中生效',
       apiBaseUrl: 'API 端点地址',
       apiKey: '访问令牌',
@@ -314,6 +317,10 @@ const I18N_TEXT = {
         system: '跟随系统',
         light: '浅色模式',
         dark: '夜间模式'
+      },
+      apiMode: {
+        responses: 'Responses',
+        chat_completions: 'Chat Completions'
       },
       selectionMode: {
         sticky: '连续选择（sticky）',
@@ -404,6 +411,7 @@ const I18N_TEXT = {
     labels: {
       enabled: 'Extension Enable',
       uiTheme: 'Theme',
+      apiMode: 'API Mode',
       injectIntoIframes: 'Enable in iFrames',
       apiBaseUrl: 'API Endpoint URL',
       apiKey: 'Access Token',
@@ -465,6 +473,10 @@ const I18N_TEXT = {
         system: 'System',
         light: 'Light',
         dark: 'Dark'
+      },
+      apiMode: {
+        responses: 'Responses',
+        chat_completions: 'Chat Completions'
       },
       selectionMode: {
         sticky: 'Sticky (continuous selection)',
@@ -537,6 +549,9 @@ function normalizeSettings(input) {
   }
   if (!['auto', 'concise', 'detailed'].includes(result.translationConfig.reasoningSummary)) {
     result.translationConfig.reasoningSummary = defaults.reasoningSummary;
+  }
+  if (!['responses', 'chat_completions'].includes(result.translationConfig.apiMode)) {
+    result.translationConfig.apiMode = defaults.apiMode;
   }
   if (!['in_memory', '24h'].includes(result.translationConfig.promptCacheRetention)) {
     result.translationConfig.promptCacheRetention = defaults.promptCacheRetention;
@@ -659,6 +674,7 @@ function applyI18n() {
   }
 
   applySelectOptionTexts('uiTheme', text.options.uiTheme);
+  applySelectOptionTexts('apiMode', text.options.apiMode);
   applySelectOptionTexts('selectionMode', text.options.selectionMode);
   applySelectOptionTexts('multipleSelectionModeHotkey', text.options.multipleSelectionModeHotkey);
   applySelectOptionTexts('outputFormat', text.options.outputFormat);
@@ -730,6 +746,14 @@ function applyTheme(themeMode) {
   }
 }
 
+function applyApiModeVisibility(apiMode) {
+  const isChatCompletions = apiMode === 'chat_completions';
+  const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
+  for (const field of responsesOnlyFields) {
+    field.hidden = isChatCompletions;
+  }
+}
+
 function showStatus(text, isError) {
   const statusEl = document.getElementById('status');
   statusEl.textContent = text;
@@ -792,6 +816,7 @@ async function testConnection(config) {
   const apiBaseUrl = String(config.apiBaseUrl || '').trim();
   const apiKey = String(config.apiKey || '').trim();
   const model = String(config.model || '').trim();
+  const apiMode = config.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
 
   if (!apiBaseUrl || !apiKey || !model) {
     throw new Error(getTextBundle().status.connectionMissingConfig);
@@ -802,7 +827,24 @@ async function testConnection(config) {
     : DEFAULT_CONFIG_BASE.requestTimeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/responses`;
+  const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+  const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
+  const requestBody = apiMode === 'chat_completions'
+    ? {
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: 'ping'
+          }
+        ],
+        max_completion_tokens: 16
+      }
+    : {
+        model,
+        input: 'ping',
+        max_output_tokens: 16
+      };
 
   try {
     const response = await fetch(endpoint, {
@@ -811,11 +853,7 @@ async function testConnection(config) {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model,
-        input: 'ping',
-        max_output_tokens: 16
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     });
 
@@ -846,6 +884,7 @@ function populateForm(settings) {
   }
 
   applyTheme(settings.uiTheme);
+  applyApiModeVisibility(settings.translationConfig.apiMode);
 }
 
 function collectFormSettings() {
@@ -1105,6 +1144,11 @@ function bindUI() {
 
   document.getElementById('uiTheme').addEventListener('change', (event) => {
     applyTheme(event.target.value);
+  });
+
+  document.getElementById('apiMode').addEventListener('change', (event) => {
+    applyApiModeVisibility(event.target.value);
+    setConnectionTestState('idle');
   });
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {

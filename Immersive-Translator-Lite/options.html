@@ -44,6 +44,14 @@
                   <option value="dark">夜间模式</option>
                 </select>
               </label>
+
+              <label class="field">
+                <span class="label">API 模式</span>
+                <select id="apiMode">
+                  <option value="responses">Responses</option>
+                  <option value="chat_completions">Chat Completions</option>
+                </select>
+              </label>
             </div>
           </section>
 
@@ -111,7 +119,7 @@
                 </select>
               </label>
 
-              <label class="field">
+              <label class="field" data-responses-only="true">
                 <span class="label">推理摘要级别</span>
                 <select id="reasoningSummary">
                   <option value="auto">auto（自动）</option>

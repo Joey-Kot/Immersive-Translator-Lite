@@ -40,7 +40,9 @@
    */
 
   const DEFAULT_CONFIG = {
-    // Responses API 服务地址，末尾可带或不带 /v1，脚本会自动拼接 /responses
+    // API 模式，responses 使用 /responses，chat_completions 使用 /chat/completions
+    apiMode: 'responses',
+    // API 服务地址，末尾可带或不带 /v1，脚本会自动拼接对应路径
     apiBaseUrl: 'https://api.example.com/v1',
     // API 密钥（Bearer Token），留空会在请求前直接报错
     apiKey: 'sk-xxx',
@@ -390,6 +392,9 @@
     }
     if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
       normalized.maxRequestRetries = DEFAULT_MAX_REQUEST_RETRIES;
+    }
+    if (!['responses', 'chat_completions'].includes(normalized.apiMode)) {
+      normalized.apiMode = DEFAULT_CONFIG.apiMode;
     }
     if (!['Alt', 'Ctrl', 'Shift', 'Meta'].includes(normalized.multipleSelectionModeHotkey)) {
       normalized.multipleSelectionModeHotkey = DEFAULT_CONFIG.multipleSelectionModeHotkey;
@@ -1273,6 +1278,7 @@
     const opts = options || {};
     const segmentsText = JSON.stringify(Array.isArray(payload?.segments) ? payload.segments : []);
     const contextText = JSON.stringify({
+      apiMode: CONFIG.apiMode,
       model: CONFIG.model,
       sourceLang: payload?.sourceLang || CONFIG.sourceLang,
       targetLang: payload?.targetLang || CONFIG.targetLang,
@@ -1692,6 +1698,7 @@
   }
 
   function buildTranslationRequestBody(prompt, instructions, options) {
+    const apiMode = CONFIG.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
     const opts = options || {};
     const isPlaceholderMode = opts.placeholderRules === true;
     const promptCacheKeyNormal = (CONFIG.promptCacheKey || '').trim() || DEFAULT_PROMPT_CACHE_KEY;
@@ -1703,6 +1710,27 @@
     const reasoningEffort = (CONFIG.reasoningEffort || '').trim() || DEFAULT_REASONING_EFFORT;
     const reasoningSummary = (CONFIG.reasoningSummary || '').trim() || DEFAULT_REASONING_SUMMARY;
     const outputFormat = (CONFIG.outputFormat || '').trim() || DEFAULT_OUTPUT_FORMAT;
+
+    if (apiMode === 'chat_completions') {
+      const requestBody = {
+        model: CONFIG.model,
+        messages: buildChatCompletionsMessages(prompt, instructions),
+        prompt_cache_key: promptCacheKey,
+        prompt_cache_retention: promptCacheRetention,
+        reasoning_effort: reasoningEffort,
+        temperature: CONFIG.temperature,
+        max_completion_tokens: CONFIG.maxOutputTokens
+      };
+
+      if (outputFormat === 'json_schema') {
+        requestBody.response_format = {
+          type: 'json_schema',
+          json_schema: buildChatCompletionsJsonSchema()
+        };
+      }
+
+      return requestBody;
+    }
 
     const requestBody = {
       model: CONFIG.model,
@@ -1727,9 +1755,80 @@
     return requestBody;
   }
 
+  function buildChatCompletionsMessages(prompt, instructions) {
+    const messages = [];
+    const instructionText = String(instructions || '').trim();
+    if (instructionText) {
+      messages.push({
+        role: 'developer',
+        content: instructionText
+      });
+    }
+    messages.push({
+      role: 'user',
+      content: extractChatCompletionsUserContent(prompt)
+    });
+    return messages;
+  }
+
+  function extractChatCompletionsUserContent(prompt) {
+    if (typeof prompt === 'string') {
+      return prompt;
+    }
+
+    const chunks = [];
+    if (Array.isArray(prompt)) {
+      for (const message of prompt) {
+        collectTextContent(message?.content, chunks);
+        if (typeof message?.text === 'string') {
+          chunks.push(message.text);
+        }
+      }
+    } else if (prompt && typeof prompt === 'object') {
+      collectTextContent(prompt.content, chunks);
+      if (typeof prompt.text === 'string') {
+        chunks.push(prompt.text);
+      }
+    }
+
+    const text = chunks.join('\n').trim();
+    if (text) {
+      return text;
+    }
+
+    try {
+      return JSON.stringify(prompt);
+    } catch {
+      return String(prompt || '');
+    }
+  }
+
+  function collectTextContent(content, chunks) {
+    if (typeof content === 'string') {
+      chunks.push(content);
+      return;
+    }
+    if (!Array.isArray(content)) {
+      return;
+    }
+    for (const item of content) {
+      if (typeof item === 'string') {
+        chunks.push(item);
+      } else if (typeof item?.text === 'string') {
+        chunks.push(item.text);
+      }
+    }
+  }
+
   function buildTranslationJsonSchemaFormat() {
     return {
       type: 'json_schema',
+      ...buildChatCompletionsJsonSchema()
+    };
+  }
+
+  function buildChatCompletionsJsonSchema() {
+    return {
       name: 'translation_segments_v1',
       strict: true,
       schema: {
@@ -1761,13 +1860,15 @@
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
-    const endpoint = `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/responses`;
+    const apiMode = CONFIG.apiMode === 'chat_completions' ? 'chat_completions' : 'responses';
+    const endpointPath = apiMode === 'chat_completions' ? 'chat/completions' : 'responses';
+    const endpoint = `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
 
     try {
-      const json = await postResponsesRequest(endpoint, controller.signal, requestBody);
-      const content = extractResponsesOutputText(json);
+      const json = await postTranslationRequest(endpoint, controller.signal, requestBody);
+      const content = extractTranslationOutputText(json, apiMode);
       if (!content) {
-        throw new Error('Responses API response missing output text');
+        throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
       }
 
       return content;
@@ -1778,11 +1879,11 @@
 
       const fallbackBody = cloneWithoutStructuredOutput(requestBody);
       notify('Structured output unsupported by endpoint. Falling back to plain JSON mode once.', 'warn');
-      console.warn('[LocalBlockTranslator] structured output unsupported, retrying once without text.format');
-      const json = await postResponsesRequest(endpoint, controller.signal, fallbackBody);
-      const content = extractResponsesOutputText(json);
+      console.warn('[LocalBlockTranslator] structured output unsupported, retrying once without structured output config');
+      const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody);
+      const content = extractTranslationOutputText(json, apiMode);
       if (!content) {
-        throw new Error('Responses API response missing output text');
+        throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
       }
       return content;
     } finally {
@@ -1790,7 +1891,7 @@
     }
   }
 
-  async function postResponsesRequest(endpoint, signal, requestBody) {
+  async function postTranslationRequest(endpoint, signal, requestBody) {
     if (CONFIG.debugRequestLog) {
       console.info('[LocalBlockTranslator] request body JSON:\n' + JSON.stringify(requestBody, null, 2));
     }
@@ -1821,10 +1922,20 @@
     const autoFallbackEnabled =
       CONFIG.structuredOutputAutoFallback ?? DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK;
     if (!autoFallbackEnabled) return false;
-    if (!requestBody || !requestBody.text || !requestBody.text.format) return false;
+    if (!hasStructuredOutputConfig(requestBody)) return false;
     if (!(error instanceof Error)) return false;
 
     return isStructuredOutputUnsupportedMessage(error.message);
+  }
+
+  function hasStructuredOutputConfig(requestBody) {
+    return Boolean(
+      requestBody &&
+      (
+        (requestBody.text && requestBody.text.format) ||
+        requestBody.response_format
+      )
+    );
   }
 
   function isStructuredOutputUnsupportedMessage(message) {
@@ -1847,6 +1958,7 @@
   function cloneWithoutStructuredOutput(requestBody) {
     const fallbackBody = { ...requestBody };
     delete fallbackBody.text;
+    delete fallbackBody.response_format;
     return fallbackBody;
   }
 
@@ -1925,6 +2037,39 @@
         await sleep(delayMs);
       }
     }
+  }
+
+  function getApiModeDisplayName(apiMode) {
+    return apiMode === 'chat_completions' ? 'Chat Completions API' : 'Responses API';
+  }
+
+  function extractTranslationOutputText(json, apiMode) {
+    if (apiMode === 'chat_completions') {
+      return extractChatCompletionsOutputText(json);
+    }
+    return extractResponsesOutputText(json);
+  }
+
+  function extractChatCompletionsOutputText(json) {
+    const content = json?.choices?.[0]?.message?.content;
+    if (typeof content === 'string') {
+      return content.trim();
+    }
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    const chunks = [];
+    for (const item of content) {
+      if (typeof item === 'string') {
+        chunks.push(item);
+      } else if (item?.type === 'text' && typeof item.text === 'string') {
+        chunks.push(item.text);
+      } else if (typeof item?.text === 'string') {
+        chunks.push(item.text);
+      }
+    }
+    return chunks.join('\n').trim();
   }
 
   function extractResponsesOutputText(json) {
