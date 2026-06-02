@@ -228,6 +228,8 @@ const I18N_TEXT = {
       testingConnection: '测试中',
       importConfig: '导入配置',
       exportConfig: '导出配置',
+      googleSync: 'Google Sync',
+      syncing: '同步中',
       show: '显示',
       hide: '隐藏',
       cancel: '取消',
@@ -249,6 +251,8 @@ const I18N_TEXT = {
       configImportInvalid: '配置文件不是有效的 JSON 设置。',
       configExportFailedPrefix: '导出配置失败',
       configImportFailedPrefix: '导入配置失败',
+      googleSyncDone: '当前本地配置已强制覆盖 chrome.storage.sync。',
+      googleSyncFailedPrefix: 'Google Sync 失败',
       saveFailedPrefix: '保存失败',
       cacheClearFailedPrefix: '清空缓存失败',
       initFailedPrefix: '初始化失败',
@@ -396,6 +400,8 @@ const I18N_TEXT = {
       testingConnection: 'Testing',
       importConfig: 'Import Config',
       exportConfig: 'Export Config',
+      googleSync: 'Google Sync',
+      syncing: 'Syncing',
       show: 'Show',
       hide: 'Hide',
       cancel: 'Cancel',
@@ -417,6 +423,8 @@ const I18N_TEXT = {
       configImportInvalid: 'The selected file is not valid JSON settings.',
       configExportFailedPrefix: 'Export config failed',
       configImportFailedPrefix: 'Import config failed',
+      googleSyncDone: 'Current local config has overwritten chrome.storage.sync.',
+      googleSyncFailedPrefix: 'Google Sync failed',
       saveFailedPrefix: 'Save failed',
       cacheClearFailedPrefix: 'Clear cache failed',
       initFailedPrefix: 'Initialization failed',
@@ -717,6 +725,7 @@ function applyI18n() {
   document.getElementById('resetBtn').textContent = text.buttons.reset;
   document.getElementById('importConfigBtn').textContent = text.buttons.importConfig;
   document.getElementById('exportConfigBtn').textContent = text.buttons.exportConfig;
+  document.getElementById('googleSyncBtn').textContent = text.buttons.googleSync;
   document.getElementById('generatePromptCacheKey').textContent = text.buttons.generate;
   document.getElementById('generatePromptCacheKeyPlaceholder').textContent = text.buttons.generate;
   document.getElementById('cleanRequestCache').textContent = text.buttons.cleanCache;
@@ -1277,6 +1286,18 @@ async function saveSettings() {
   }).catch(() => {});
 }
 
+async function forceGoogleSyncSettings() {
+  const settings = collectFormSettings();
+  await chrome.storage.sync.set({ settings });
+  applyTheme(settings.uiTheme);
+  setConnectionTestState('idle');
+  showStatus(getTextBundle().status.googleSyncDone, false);
+  await chrome.runtime.sendMessage({
+    type: MESSAGE_TYPES.SETTINGS_UPDATED,
+    settings
+  }).catch(() => {});
+}
+
 async function resetSettings() {
   const defaults = normalizeSettings(getDefaultSettings());
   await chrome.storage.sync.set({ settings: defaults });
@@ -1354,6 +1375,23 @@ function bindUI() {
     } catch (error) {
       console.error('[LIT Options] export config failed:', error);
       showStatus(`${getTextBundle().status.configExportFailedPrefix}: ${String(error?.message || error)}`, true);
+    }
+  });
+
+  document.getElementById('googleSyncBtn').addEventListener('click', async () => {
+    const button = document.getElementById('googleSyncBtn');
+    const text = getTextBundle();
+    button.disabled = true;
+    button.textContent = text.buttons.syncing;
+
+    try {
+      await forceGoogleSyncSettings();
+    } catch (error) {
+      console.error('[LIT Options] Google Sync failed:', error);
+      showStatus(`${text.status.googleSyncFailedPrefix}: ${String(error?.message || error)}`, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = getTextBundle().buttons.googleSync;
     }
   });
 
