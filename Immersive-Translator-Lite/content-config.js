@@ -1,63 +1,11 @@
 (function () {
   'use strict';
 
-  const SETTINGS_SCHEMA_VERSION = 1;
-
-  const DEFAULT_CONFIG = {
-    apiMode: 'responses',
-    apiBaseUrl: 'https://api.example.com/v1',
-    apiKey: 'sk-xxx',
-    model: 'gpt-5.4-mini',
-    sourceLang: 'Any Language',
-    targetLang: 'Chinese Simplified',
-    responseInstructions: '',
-    geminiCacheEnabled: true,
-    deepSeekThinkingEnabled: true,
-    promptCacheKey: '188f6fd3-49ea-4f63-ae50-b87cf9574a1a',
-    promptCacheKeyPlaceholder: '111acfce-6ac6-4373-bdcb-61455403f3af',
-    promptCacheRetention: '24h',
-    reasoningEffort: 'none',
-    reasoningSummary: 'auto',
-    outputFormat: 'json_schema',
-    maxSegmentsPerRequest: 50,
-    maxConcurrentRequests: 10,
-    maxRequestRetries: 3,
-    structuredOutputAutoFallback: true,
-    requestCacheEnabled: true,
-    requestCacheTimeoutHours: 24,
-    hotkey: 'Alt+KeyA',
-    multipleSelectionMode: true,
-    multipleSelectionModeHotkey: 'Alt',
-    multipleSelectionMergeRequest: true,
-    enableTouchShortcuts: true,
-    doubleTapMaxDelayMs: 280,
-    doubleTapMaxMovePx: 24,
-    threeFingerCancelEnabled: true,
-    debugHotkey: false,
-    debugProcessLog: true,
-    debugReorder: false,
-    debugRequestLog: false,
-    debugResponseLog: false,
-    showLauncher: false,
-    selectionMode: 'sticky',
-    notifyOnDuplicateSelection: true,
-    scriptBuildId: '',
-    requestTimeoutMs: 60000,
-    temperature: 0,
-    maxOutputTokens: 128000,
-    injectIntoIframes: true
-  };
-
-  const CONSTANTS = {
-    DEFAULT_MAX_SEGMENTS_PER_REQUEST: 50,
-    DEFAULT_MAX_CONCURRENT_REQUESTS: 10,
-    DEFAULT_MAX_REQUEST_RETRIES: 3,
-    DEFAULT_HOTKEY: 'Alt+KeyA',
-    DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS: 24,
-    RETRY_BASE_DELAY_MS: 500,
-    RETRY_MAX_DELAY_MS: 5000,
-    REQUEST_CACHE_STORAGE_PREFIX: 'lit_request_cache_v1_'
-  };
+  const SHARED_CONFIG = window.LocalBlockTranslatorSharedConfig;
+  const SETTINGS_SCHEMA_VERSION = SHARED_CONFIG.SETTINGS_SCHEMA_VERSION;
+  const DEFAULT_CONFIG = SHARED_CONFIG.DEFAULT_TRANSLATION_CONFIG;
+  const FIELD_TYPES = SHARED_CONFIG.FIELD_TYPES;
+  const CONSTANTS = SHARED_CONFIG.CONSTANTS;
 
   function createConfigClient() {
     const config = { ...DEFAULT_CONFIG };
@@ -68,12 +16,7 @@
     };
 
     function buildDefaultSettingsPayload() {
-      return {
-        version: SETTINGS_SCHEMA_VERSION,
-        enabled: true,
-        uiTheme: 'system',
-        translationConfig: { ...DEFAULT_CONFIG }
-      };
+      return SHARED_CONFIG.createDefaultSettings();
     }
 
     function normalizeValueByType(rawValue, defaultValue) {
@@ -92,7 +35,7 @@
     function normalizeTranslationConfig(input) {
       const source = input && typeof input === 'object' ? input : {};
       const normalized = {};
-      for (const key of Object.keys(DEFAULT_CONFIG)) {
+      for (const key of Object.keys(FIELD_TYPES)) {
         normalized[key] = normalizeValueByType(source[key], DEFAULT_CONFIG[key]);
       }
       if (!Object.prototype.hasOwnProperty.call(source, 'promptCacheKeyPlaceholder')) {
