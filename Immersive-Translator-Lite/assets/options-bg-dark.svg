@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 3840">
+  <defs>
+    <linearGradient id="base" x1="3840" y1="0" x2="0" y2="3840" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#061a48"/>
+      <stop offset=".42" stop-color="#02091f"/>
+      <stop offset="1" stop-color="#070033"/>
+    </linearGradient>
+
+    <radialGradient id="topGlow" cx="2310" cy="110" fx="2310" fy="110" r="2200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c7dcff" stop-opacity=".92"/>
+      <stop offset=".18" stop-color="#58a7ff" stop-opacity=".74"/>
+      <stop offset=".44" stop-color="#006cef" stop-opacity=".46"/>
+      <stop offset=".78" stop-color="#003d9f" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#003d9f" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="centerBlue" cx="1890" cy="1660" fx="1890" fy="1660" r="2100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b7cff" stop-opacity=".68"/>
+      <stop offset=".34" stop-color="#005de5" stop-opacity=".44"/>
+      <stop offset=".74" stop-color="#00308a" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#00308a" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="leftBeam" cx="120" cy="3190" fx="120" fy="3190" r="1850" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d7f1ff" stop-opacity=".7"/>
+      <stop offset=".22" stop-color="#41b8ff" stop-opacity=".48"/>
+      <stop offset=".58" stop-color="#0072ff" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#0072ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="rightDepth" cx="3710" cy="3330" fx="3710" fy="3330" r="2100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#001a5c" stop-opacity=".72"/>
+      <stop offset=".46" stop-color="#00113f" stop-opacity=".34"/>
+      <stop offset="1" stop-color="#00113f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="3840" height="3840" fill="url(#base)"/>
+  <rect width="3840" height="3840" fill="url(#topGlow)"/>
+  <rect width="3840" height="3840" fill="url(#centerBlue)"/>
+  <rect width="3840" height="3840" fill="url(#leftBeam)"/>
+  <rect width="3840" height="3840" fill="url(#rightDepth)"/>
+</svg>

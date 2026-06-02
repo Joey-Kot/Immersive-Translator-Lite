@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 3840 3840">
+  <defs>
+    <linearGradient id="b" x1="3992.58" y1="181.74" x2="-150.58" y2="3658.26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b5d7f7"/>
+      <stop offset="1" stop-color="#f7dbab"/>
+    </linearGradient>
+    <radialGradient id="c" cx="3748.5" cy="-.5" fx="3748.5" fy="-.5" r="1991.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7dbab"/>
+      <stop offset=".39" stop-color="#e4dac1" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#b5d7f7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="d" cx="165.5" cy="3840.5" fx="165.5" fy="3840.5" r="2150.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b5d7f7"/>
+      <stop offset=".16" stop-color="#b5d7f7" stop-opacity=".89"/>
+      <stop offset="1" stop-color="#b5d7f7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g>
+    <rect x="1.5" y=".5" width="3839" height="3839" style="fill: url(#b);"/>
+    <path d="M3840,1v3838H2V1h3838M3841,0H1v3840h3840V0h0Z"/>
+  </g>
+  <rect x="1757" y="-1992" width="3983" height="3983" style="fill: url(#c);"/>
+  <rect x="-1985" y="1690" width="4301" height="4301" style="fill: url(#d);"/>
+</svg>

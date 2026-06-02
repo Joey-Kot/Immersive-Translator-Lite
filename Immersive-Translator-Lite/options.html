@@ -399,10 +399,11 @@
           <button id="exportConfigBtn" type="button" class="neutral">导出配置</button>
           <button id="googleSyncBtn" type="button" class="neutral">Google Sync</button>
           <input id="importConfigInput" type="file" accept="application/json,.json" hidden />
-          <span id="status" class="status"></span>
         </div>
       </div>
     </main>
+
+    <div id="status" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
     <div id="confirmOverlay" class="confirm-overlay hidden" aria-hidden="true">
       <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">

@@ -459,6 +459,8 @@ function setFieldValue(field, value, type) {
     return;
   }
   field.value = value == null ? '' : String(value);
+  syncCustomSelect(field);
+  syncCustomTextarea(field);
 }
 
 function detectLocale() {
@@ -489,6 +491,247 @@ function getTextBundle() {
   return I18N_TEXT[currentLocale] || I18N_TEXT.zh;
 }
 
+function getCustomSelectState(select) {
+  return select?._customSelectState || null;
+}
+
+function getSelectOptionText(select) {
+  return select.selectedOptions[0]?.textContent || select.options[0]?.textContent || '';
+}
+
+function closeCustomSelect(select) {
+  const state = getCustomSelectState(select);
+  if (!state) return;
+  state.wrapper.classList.remove('open');
+  state.button.setAttribute('aria-expanded', 'false');
+  state.wrapper.closest('.group-card')?.classList.remove('has-open-select');
+}
+
+function closeOtherCustomSelects(currentSelect) {
+  for (const select of document.querySelectorAll('select')) {
+    if (select !== currentSelect) {
+      closeCustomSelect(select);
+    }
+  }
+}
+
+function syncCustomSelect(select) {
+  const state = getCustomSelectState(select);
+  if (!state) return;
+
+  state.value.textContent = getSelectOptionText(select);
+  state.button.disabled = select.disabled;
+  state.menu.replaceChildren(
+    ...Array.from(select.options).map((option) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'custom-select-option';
+      item.dataset.value = option.value;
+      item.textContent = option.textContent;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+      item.disabled = option.disabled;
+      item.hidden = option.hidden;
+      item.addEventListener('click', () => {
+        if (select.value !== option.value) {
+          select.value = option.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        syncCustomSelect(select);
+        closeCustomSelect(select);
+        state.button.focus();
+      });
+      item.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeCustomSelect(select);
+          state.button.focus();
+          return;
+        }
+
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const options = Array.from(state.menu.querySelectorAll('.custom-select-option:not([disabled])'));
+        const currentIndex = options.indexOf(item);
+        const nextIndex =
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? options.length - 1
+              : event.key === 'ArrowUp'
+                ? Math.max(0, currentIndex - 1)
+                : Math.min(options.length - 1, currentIndex + 1);
+        options[nextIndex]?.focus();
+      });
+      return item;
+    })
+  );
+}
+
+function enhanceSelect(select) {
+  if (!select || getCustomSelectState(select)) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-select';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'custom-select-button';
+  button.setAttribute('aria-haspopup', 'listbox');
+  button.setAttribute('aria-expanded', 'false');
+
+  const value = document.createElement('span');
+  value.className = 'custom-select-value';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'custom-select-arrow';
+  arrow.setAttribute('aria-hidden', 'true');
+
+  const menu = document.createElement('div');
+  menu.className = 'custom-select-menu';
+  menu.setAttribute('role', 'listbox');
+
+  button.append(value, arrow);
+  select.before(wrapper);
+  wrapper.append(select, button, menu);
+  select.classList.add('native-select');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
+
+  select._customSelectState = { wrapper, button, value, menu };
+
+  button.addEventListener('click', () => {
+    const isOpen = wrapper.classList.contains('open');
+    closeOtherCustomSelects(select);
+    wrapper.classList.toggle('open', !isOpen);
+    button.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    wrapper.closest('.group-card')?.classList.toggle('has-open-select', !isOpen);
+  });
+
+  button.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    closeOtherCustomSelects(select);
+    wrapper.classList.add('open');
+    button.setAttribute('aria-expanded', 'true');
+    wrapper.closest('.group-card')?.classList.add('has-open-select');
+
+    const selectedOption = stateForSelectOption(menu, true);
+    const firstOption = stateForSelectOption(menu, false);
+    const optionToFocus = event.key === 'ArrowUp' ? selectedOption || firstOption : firstOption || selectedOption;
+    optionToFocus?.focus();
+  });
+
+  select.addEventListener('change', () => {
+    syncCustomSelect(select);
+  });
+
+  syncCustomSelect(select);
+}
+
+function stateForSelectOption(menu, selectedOnly) {
+  const selector = selectedOnly
+    ? '.custom-select-option[aria-selected="true"]:not([disabled])'
+    : '.custom-select-option:not([disabled])';
+  return menu.querySelector(selector);
+}
+
+function enhanceSelects() {
+  for (const select of document.querySelectorAll('select')) {
+    enhanceSelect(select);
+  }
+}
+
+function getCustomTextareaState(textarea) {
+  return textarea?._customTextareaState || null;
+}
+
+function syncCustomTextarea(textarea) {
+  const state = getCustomTextareaState(textarea);
+  if (!state) return;
+
+  requestAnimationFrame(() => {
+    const maxScroll = textarea.scrollHeight - textarea.clientHeight;
+    if (maxScroll <= 1) {
+      state.wrapper.classList.add('no-scroll');
+      state.thumb.style.height = '0px';
+      state.thumb.style.transform = 'translateY(0)';
+      return;
+    }
+
+    state.wrapper.classList.remove('no-scroll');
+    const trackHeight = state.track.clientHeight;
+    const thumbHeight = Math.max(36, Math.round((textarea.clientHeight / textarea.scrollHeight) * trackHeight));
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+    const thumbTop = Math.round((textarea.scrollTop / maxScroll) * maxThumbTop);
+    state.thumb.style.height = `${thumbHeight}px`;
+    state.thumb.style.transform = `translateY(${thumbTop}px)`;
+  });
+}
+
+function enhanceTextarea(textarea) {
+  if (!textarea || getCustomTextareaState(textarea)) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-textarea';
+
+  const track = document.createElement('div');
+  track.className = 'custom-textarea-scrollbar';
+  track.setAttribute('aria-hidden', 'true');
+
+  const thumb = document.createElement('div');
+  thumb.className = 'custom-textarea-thumb';
+
+  textarea.before(wrapper);
+  wrapper.append(textarea, track);
+  track.append(thumb);
+  textarea.classList.add('custom-textarea-input');
+
+  textarea._customTextareaState = { wrapper, track, thumb };
+
+  textarea.addEventListener('scroll', () => syncCustomTextarea(textarea));
+  textarea.addEventListener('input', () => syncCustomTextarea(textarea));
+
+  thumb.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startScrollTop = textarea.scrollTop;
+    const maxScroll = textarea.scrollHeight - textarea.clientHeight;
+    const maxThumbTop = track.clientHeight - thumb.offsetHeight;
+    if (maxScroll <= 0 || maxThumbTop <= 0) return;
+
+    const onPointerMove = (moveEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      textarea.scrollTop = startScrollTop + (deltaY / maxThumbTop) * maxScroll;
+      syncCustomTextarea(textarea);
+    };
+
+    const onPointerUp = () => {
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      thumb.classList.remove('dragging');
+    };
+
+    thumb.classList.add('dragging');
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+  });
+
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => syncCustomTextarea(textarea));
+    observer.observe(textarea);
+    textarea._customTextareaResizeObserver = observer;
+  }
+
+  syncCustomTextarea(textarea);
+}
+
+function enhanceTextareas() {
+  for (const textarea of document.querySelectorAll('textarea')) {
+    enhanceTextarea(textarea);
+  }
+}
+
 function applySelectOptionTexts(selectId, optionMap) {
   const select = document.getElementById(selectId);
   if (!select || !optionMap) return;
@@ -497,6 +740,7 @@ function applySelectOptionTexts(selectId, optionMap) {
       option.textContent = optionMap[option.value];
     }
   }
+  syncCustomSelect(select);
 }
 
 function getReasoningEffortValuesForApiMode(apiMode) {
@@ -527,6 +771,7 @@ function applyReasoningEffortOptions(apiMode, preferredValue) {
     })
   );
   select.value = values.includes(currentValue) ? currentValue : getDefaultReasoningEffortForApiMode(apiMode);
+  syncCustomSelect(select);
 }
 
 function applyI18n() {
@@ -659,6 +904,7 @@ function applyApiModeVisibility(apiMode) {
     const outputFormat = document.getElementById('outputFormat');
     if (outputFormat) {
       outputFormat.value = 'none';
+      syncCustomSelect(outputFormat);
     }
   }
 
@@ -699,9 +945,58 @@ function applyApiModeVisibility(apiMode) {
 }
 
 function showStatus(text, isError) {
-  const statusEl = document.getElementById('status');
-  statusEl.textContent = text;
-  statusEl.style.color = isError ? '#d14242' : '';
+  const stack = document.getElementById('status');
+  if (!stack) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${isError ? 'error' : 'success'}`;
+  toast.style.setProperty('--toast-index', String(stack.children.length));
+  toast.setAttribute('role', isError ? 'alert' : 'status');
+
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = isError ? '!' : '✓';
+
+  const message = document.createElement('span');
+  message.className = 'toast-message';
+  message.textContent = text;
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'toast-close';
+  closeButton.setAttribute('aria-label', 'Dismiss notification');
+  closeButton.textContent = '×';
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    toast.classList.add('leaving');
+    window.setTimeout(() => {
+      toast.remove();
+      updateToastStack();
+    }, 180);
+  };
+
+  closeButton.addEventListener('click', dismiss);
+  toast.append(icon, message, closeButton);
+  stack.prepend(toast);
+  updateToastStack();
+
+  window.setTimeout(dismiss, 5000);
+}
+
+function updateToastStack() {
+  const stack = document.getElementById('status');
+  if (!stack) return;
+  Array.from(stack.children).forEach((toast, index) => {
+    const layer = Math.min(index, 3);
+    toast.style.setProperty('--toast-index', String(index));
+    toast.style.setProperty('--toast-stack-y', `${layer * 13}px`);
+    toast.style.setProperty('--toast-stack-inset', `${layer * 5}px`);
+    toast.style.setProperty('--toast-expanded-y', `${index * 58}px`);
+  });
 }
 
 function setConnectionTestState(state) {
@@ -1327,12 +1622,22 @@ function bindUI() {
   });
 
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeOtherCustomSelects(null);
+      return;
+    }
+
     if (event.isComposing) return;
     if (event.key.toLowerCase() !== 's') return;
     if (!event.ctrlKey && !event.metaKey) return;
 
     event.preventDefault();
     saveButton.click();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.custom-select')) return;
+    closeOtherCustomSelects(null);
   });
 
   document.getElementById('uiTheme').addEventListener('change', (event) => {
@@ -1357,6 +1662,8 @@ async function init() {
   currentLocale = detectLocale();
   applyTouchSettingsVisibility(detectMobileDevice());
   applyI18n();
+  enhanceSelects();
+  enhanceTextareas();
   bindUI();
   const settings = await readSettings();
   populateForm(settings);
