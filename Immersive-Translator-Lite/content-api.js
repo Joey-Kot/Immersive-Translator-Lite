@@ -8,7 +8,14 @@
   const DEFAULT_REASONING_SUMMARY = 'auto';
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
   const DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK = true;
-  const GEMINI_SYSTEM_CACHE_STORAGE_PREFIX = 'lit_gemini_system_cache_v1_';
+  const GOOGLE_SYSTEM_CACHE_STORAGE_PREFIX = 'lit_google_system_cache_v1_';
+  const API_MODES = window.LocalBlockTranslatorSharedConfig?.API_MODES || [
+    'responses',
+    'chat_completions',
+    'openai_compatible',
+    'deepseek',
+    'google'
+  ];
   const MESSAGE_TYPES = {
     API_REQUEST: 'API_REQUEST'
   };
@@ -18,10 +25,10 @@
     const sha256Hex = deps.sha256Hex;
     const getErrorMessage = deps.getErrorMessage;
     const notify = deps.notify;
-    let geminiSystemCacheUnavailable = false;
+    let googleSystemCacheUnavailable = false;
 
     function resetRuntimeState() {
-      geminiSystemCacheUnavailable = false;
+      googleSystemCacheUnavailable = false;
     }
 
     async function buildTranslationRequestBody(prompt, instructions, options) {
@@ -38,13 +45,13 @@
       const reasoningSummary = (CONFIG.reasoningSummary || '').trim() || DEFAULT_REASONING_SUMMARY;
       const outputFormat = (CONFIG.outputFormat || '').trim() || DEFAULT_OUTPUT_FORMAT;
 
-      if (apiMode === 'gemini') {
+      if (apiMode === 'google') {
         const requestBody = {
-          contents: buildGeminiContents(prompt),
-          generationConfig: buildGeminiGenerationConfig(outputFormat, reasoningEffort)
+          contents: buildGoogleContents(prompt),
+          generationConfig: buildGoogleGenerationConfig(outputFormat, reasoningEffort)
         };
 
-        await attachGeminiSystemInstruction(requestBody, instructions);
+        await attachGoogleSystemInstruction(requestBody, instructions);
         return requestBody;
       }
 
@@ -64,6 +71,21 @@
             type: 'json_schema',
             json_schema: buildChatCompletionsJsonSchema()
           };
+        }
+
+        return requestBody;
+      }
+
+      if (apiMode === 'openai_compatible') {
+        const requestBody = {
+          model: CONFIG.model,
+          messages: buildOpenAiCompatibleMessages(prompt, instructions),
+          temperature: CONFIG.temperature,
+          max_tokens: CONFIG.maxOutputTokens
+        };
+
+        if (reasoningEffort && reasoningEffort !== 'none') {
+          requestBody.reasoning_effort = reasoningEffort;
         }
 
         return requestBody;
@@ -120,7 +142,8 @@
       }
 
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
+      const timeoutMs = getRequestTimeoutMs();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       const apiMode = normalizeApiMode(CONFIG.apiMode);
       const endpoint = buildTranslationEndpoint(apiMode);
 
@@ -133,9 +156,9 @@
 
         return content;
       } catch (error) {
-        if (shouldRetryWithoutGeminiThinking(error, requestBody, apiMode)) {
-          const fallbackBody = cloneWithoutGeminiThinking(requestBody);
-          console.warn('[LocalBlockTranslator] Gemini thinkingConfig unsupported, retrying once without thinking config');
+        if (shouldRetryWithoutGoogleThinking(error, requestBody, apiMode)) {
+          const fallbackBody = cloneWithoutGoogleThinking(requestBody);
+          console.warn('[LocalBlockTranslator] Google thinkingConfig unsupported, retrying once without thinking config');
           const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody, { apiMode });
           const content = extractTranslationOutputText(json, apiMode);
           if (!content) {
@@ -179,6 +202,22 @@
     }
 
     function buildDeepSeekMessages(prompt, instructions) {
+      const messages = [];
+      const instructionText = String(instructions || '').trim();
+      if (instructionText) {
+        messages.push({
+          role: 'system',
+          content: instructionText
+        });
+      }
+      messages.push({
+        role: 'user',
+        content: extractChatCompletionsUserContent(prompt)
+      });
+      return messages;
+    }
+
+    function buildOpenAiCompatibleMessages(prompt, instructions) {
       const messages = [];
       const instructionText = String(instructions || '').trim();
       if (instructionText) {
@@ -261,10 +300,10 @@
     }
 
     function normalizeApiMode(apiMode) {
-      return ['responses', 'chat_completions', 'deepseek', 'gemini'].includes(apiMode) ? apiMode : 'responses';
+      return API_MODES.includes(apiMode) ? apiMode : 'responses';
     }
 
-    function buildGeminiContents(prompt) {
+    function buildGoogleContents(prompt) {
       return [
         {
           role: 'user',
@@ -277,22 +316,22 @@
       ];
     }
 
-    function buildGeminiGenerationConfig(outputFormat, reasoningEffort) {
+    function buildGoogleGenerationConfig(outputFormat, reasoningEffort) {
       const generationConfig = {
         temperature: CONFIG.temperature,
         maxOutputTokens: CONFIG.maxOutputTokens,
-        thinkingConfig: buildGeminiThinkingConfig(reasoningEffort)
+        thinkingConfig: buildGoogleThinkingConfig(reasoningEffort)
       };
 
       if (outputFormat === 'json_schema') {
         generationConfig.responseMimeType = 'application/json';
-        generationConfig.responseSchema = buildGeminiResponseSchema();
+        generationConfig.responseSchema = buildGoogleResponseSchema();
       }
 
       return generationConfig;
     }
 
-    function buildGeminiThinkingConfig(reasoningEffort) {
+    function buildGoogleThinkingConfig(reasoningEffort) {
       const effort = String(reasoningEffort || '').trim().toLowerCase();
       const levelMap = {
         none: 'minimal',
@@ -307,7 +346,7 @@
       };
     }
 
-    function buildGeminiResponseSchema() {
+    function buildGoogleResponseSchema() {
       return {
         type: 'OBJECT',
         additionalProperties: false,
@@ -329,7 +368,7 @@
       };
     }
 
-    function buildGeminiSystemInstruction(instructions) {
+    function buildGoogleSystemInstruction(instructions) {
       return {
         parts: [
           {
@@ -339,32 +378,32 @@
       };
     }
 
-    async function attachGeminiSystemInstruction(requestBody, instructions) {
+    async function attachGoogleSystemInstruction(requestBody, instructions) {
       const instructionText = String(instructions || '').trim();
       if (!instructionText) return;
 
-      if (CONFIG.geminiCacheEnabled === false || geminiSystemCacheUnavailable) {
-        requestBody.systemInstruction = buildGeminiSystemInstruction(instructionText);
+      if (CONFIG.googleCacheEnabled === false || googleSystemCacheUnavailable) {
+        requestBody.systemInstruction = buildGoogleSystemInstruction(instructionText);
         return;
       }
 
       try {
-        const cacheName = await resolveGeminiSystemCacheName(instructionText);
+        const cacheName = await resolveGoogleSystemCacheName(instructionText);
         if (cacheName) {
           requestBody.cachedContent = cacheName;
           return;
         }
       } catch (error) {
-        if (isGeminiCacheEndpointUnsupportedError(error)) {
-          geminiSystemCacheUnavailable = true;
+        if (isGoogleCacheEndpointUnsupportedError(error)) {
+          googleSystemCacheUnavailable = true;
         }
-        console.warn('[LocalBlockTranslator] Gemini system instruction cache unavailable, falling back:', error);
+        console.warn('[LocalBlockTranslator] Google system instruction cache unavailable, falling back:', error);
       }
 
-      requestBody.systemInstruction = buildGeminiSystemInstruction(instructionText);
+      requestBody.systemInstruction = buildGoogleSystemInstruction(instructionText);
     }
 
-    function isGeminiCacheEndpointUnsupportedError(error) {
+    function isGoogleCacheEndpointUnsupportedError(error) {
       const message = getErrorMessage(error).toLowerCase();
       return (
         message.includes('api http 404') ||
@@ -373,14 +412,14 @@
       );
     }
 
-    async function resolveGeminiSystemCacheName(instructionText) {
+    async function resolveGoogleSystemCacheName(instructionText) {
       if (!chrome?.storage?.local) return '';
 
-      const signature = await buildGeminiSystemCacheSignature(instructionText);
-      const storageKey = `${GEMINI_SYSTEM_CACHE_STORAGE_PREFIX}${signature}`;
+      const signature = await buildGoogleSystemCacheSignature(instructionText);
+      const storageKey = `${GOOGLE_SYSTEM_CACHE_STORAGE_PREFIX}${signature}`;
       const stored = await chrome.storage.local.get(storageKey);
       const entry = stored[storageKey];
-      if (isValidGeminiSystemCacheEntry(entry)) {
+      if (isValidGoogleSystemCacheEntry(entry)) {
         return entry.name;
       }
 
@@ -388,14 +427,14 @@
         await chrome.storage.local.remove(storageKey).catch(() => {});
       }
 
-      const created = await createGeminiSystemCache(instructionText);
+      const created = await createGoogleSystemCache(instructionText);
       if (!created?.name) return '';
 
-      const expiresAt = parseGeminiCacheExpiresAt(created.expireTime);
+      const expiresAt = parseGoogleCacheExpiresAt(created.expireTime);
       await chrome.storage.local.set({
         [storageKey]: {
           name: created.name,
-          model: formatGeminiModelPath(CONFIG.model),
+          model: formatGoogleModelPath(CONFIG.model),
           signature,
           expireTime: created.expireTime || '',
           expiresAt
@@ -404,51 +443,52 @@
       return created.name;
     }
 
-    async function buildGeminiSystemCacheSignature(instructionText) {
+    async function buildGoogleSystemCacheSignature(instructionText) {
       const raw = JSON.stringify({
-        model: formatGeminiModelPath(CONFIG.model),
+        model: formatGoogleModelPath(CONFIG.model),
         instructions: instructionText,
-        retention: resolveGeminiCacheRetention()
+        retention: resolveGoogleCacheRetention()
       });
       return sha256Hex(raw);
     }
 
-    function isValidGeminiSystemCacheEntry(entry) {
+    function isValidGoogleSystemCacheEntry(entry) {
       if (!entry || typeof entry !== 'object') return false;
       if (typeof entry.name !== 'string' || !entry.name.startsWith('cachedContents/')) return false;
-      if (entry.model !== formatGeminiModelPath(CONFIG.model)) return false;
+      if (entry.model !== formatGoogleModelPath(CONFIG.model)) return false;
       if (!Number.isFinite(entry.expiresAt)) return false;
       return Date.now() < entry.expiresAt - 60 * 1000;
     }
 
-    async function createGeminiSystemCache(instructionText) {
-      const endpoint = buildGeminiCacheEndpoint();
+    async function createGoogleSystemCache(instructionText) {
+      const endpoint = buildGoogleCacheEndpoint();
       const requestBody = {
-        model: formatGeminiModelPath(CONFIG.model),
-        systemInstruction: buildGeminiSystemInstruction(instructionText)
+        model: formatGoogleModelPath(CONFIG.model),
+        systemInstruction: buildGoogleSystemInstruction(instructionText)
       };
-      const ttl = buildGeminiCacheTtl();
+      const ttl = buildGoogleCacheTtl();
       if (ttl) {
         requestBody.ttl = ttl;
       }
 
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
+      const timeoutMs = getRequestTimeoutMs();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await postTranslationRequest(endpoint, controller.signal, requestBody, {
-          apiMode: 'gemini'
+          apiMode: 'google'
         });
       } finally {
         clearTimeout(timer);
       }
     }
 
-    function resolveGeminiCacheRetention() {
+    function resolveGoogleCacheRetention() {
       return (CONFIG.promptCacheRetention || '').trim() || DEFAULT_PROMPT_CACHE_RETENTION;
     }
 
-    function buildGeminiCacheTtl() {
-      const retention = resolveGeminiCacheRetention();
+    function buildGoogleCacheTtl() {
+      const retention = resolveGoogleCacheRetention();
       if (retention === 'in_memory') {
         return '';
       }
@@ -466,29 +506,29 @@
       return '86400s';
     }
 
-    function parseGeminiCacheExpiresAt(expireTime) {
+    function parseGoogleCacheExpiresAt(expireTime) {
       const parsed = Date.parse(String(expireTime || ''));
       if (Number.isFinite(parsed)) {
         return parsed;
       }
 
-      const ttl = buildGeminiCacheTtl();
+      const ttl = buildGoogleCacheTtl();
       const match = ttl.match(/^(\d+)s$/);
       const fallbackSeconds = match ? Number(match[1]) : 3600;
       return Date.now() + Math.max(1, fallbackSeconds) * 1000;
     }
 
-    function formatGeminiModelPath(model) {
+    function formatGoogleModelPath(model) {
       const trimmed = String(model || '').trim().replace(/^\/+/, '');
       return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
     }
 
-    function buildGeminiCacheEndpoint() {
+    function buildGoogleCacheEndpoint() {
       return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/cachedContents`;
     }
 
-    function buildGeminiGenerateContentEndpoint() {
-      return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${formatGeminiModelPath(CONFIG.model)}:generateContent`;
+    function buildGoogleGenerateContentEndpoint() {
+      return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${formatGoogleModelPath(CONFIG.model)}:generateContent`;
     }
 
     function buildTranslationJsonSchemaFormat() {
@@ -525,10 +565,13 @@
     }
 
     function buildTranslationEndpoint(apiMode) {
-      if (apiMode === 'gemini') {
-        return buildGeminiGenerateContentEndpoint();
+      if (apiMode === 'google') {
+        return buildGoogleGenerateContentEndpoint();
       }
-      const endpointPath = apiMode === 'chat_completions' || apiMode === 'deepseek' ? 'chat/completions' : 'responses';
+      const endpointPath =
+        apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek'
+          ? 'chat/completions'
+          : 'responses';
       return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
     }
 
@@ -548,7 +591,7 @@
         fetchOptions.signal = signal;
       }
 
-      const response = await sendApiRequestViaBackground(endpoint, fetchOptions, CONFIG.requestTimeoutMs);
+      const response = await sendApiRequestViaBackground(endpoint, fetchOptions, getRequestTimeoutMs());
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '');
@@ -630,12 +673,19 @@
       const headers = {
         'Content-Type': 'application/json'
       };
-      if (apiMode === 'gemini') {
+      if (apiMode === 'google') {
         headers['x-goog-api-key'] = CONFIG.apiKey;
       } else {
         headers.Authorization = `Bearer ${CONFIG.apiKey}`;
       }
       return headers;
+    }
+
+    function getRequestTimeoutMs() {
+      const timeoutSeconds = Number.isFinite(CONFIG.requestTimeoutSeconds) && CONFIG.requestTimeoutSeconds > 0
+        ? CONFIG.requestTimeoutSeconds
+        : 60;
+      return timeoutSeconds * 1000;
     }
 
     function shouldRetryWithoutStructuredOutput(error, requestBody) {
@@ -648,14 +698,14 @@
       return isStructuredOutputUnsupportedMessage(error.message);
     }
 
-    function shouldRetryWithoutGeminiThinking(error, requestBody, apiMode) {
-      if (apiMode !== 'gemini') return false;
+    function shouldRetryWithoutGoogleThinking(error, requestBody, apiMode) {
+      if (apiMode !== 'google') return false;
       if (!requestBody?.generationConfig?.thinkingConfig) return false;
       if (!(error instanceof Error)) return false;
-      return isGeminiThinkingUnsupportedMessage(error.message);
+      return isGoogleThinkingUnsupportedMessage(error.message);
     }
 
-    function isGeminiThinkingUnsupportedMessage(message) {
+    function isGoogleThinkingUnsupportedMessage(message) {
       if (typeof message !== 'string') return false;
       const lower = message.toLowerCase();
       const mentionsThinking =
@@ -721,7 +771,7 @@
       return fallbackBody;
     }
 
-    function cloneWithoutGeminiThinking(requestBody) {
+    function cloneWithoutGoogleThinking(requestBody) {
       const fallbackBody = { ...requestBody };
       if (fallbackBody.generationConfig) {
         fallbackBody.generationConfig = { ...fallbackBody.generationConfig };
@@ -771,17 +821,18 @@
 
     function getApiModeDisplayName(apiMode) {
       if (apiMode === 'chat_completions') return 'OpenAI Completions API';
+      if (apiMode === 'openai_compatible') return 'OpenAI-Compatible API';
       if (apiMode === 'deepseek') return 'DeepSeek API';
-      if (apiMode === 'gemini') return 'Gemini API';
+      if (apiMode === 'google') return 'Google API';
       return 'OpenAI Responses API';
     }
 
     function extractTranslationOutputText(json, apiMode) {
-      if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
+      if (apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek') {
         return extractChatCompletionsOutputText(json);
       }
-      if (apiMode === 'gemini') {
-        return extractGeminiOutputText(json);
+      if (apiMode === 'google') {
+        return extractGoogleOutputText(json);
       }
       return extractResponsesOutputText(json);
     }
@@ -808,7 +859,7 @@
       return chunks.join('\n').trim();
     }
 
-    function extractGeminiOutputText(json) {
+    function extractGoogleOutputText(json) {
       const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
       const chunks = [];
       for (const candidate of candidates) {

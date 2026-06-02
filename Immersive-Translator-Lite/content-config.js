@@ -3,6 +3,7 @@
 
   const SHARED_CONFIG = window.LocalBlockTranslatorSharedConfig;
   const SETTINGS_SCHEMA_VERSION = SHARED_CONFIG.SETTINGS_SCHEMA_VERSION;
+  const API_MODES = SHARED_CONFIG.API_MODES;
   const DEFAULT_CONFIG = SHARED_CONFIG.DEFAULT_TRANSLATION_CONFIG;
   const FIELD_TYPES = SHARED_CONFIG.FIELD_TYPES;
   const CONSTANTS = SHARED_CONFIG.CONSTANTS;
@@ -50,8 +51,11 @@
       if (!Number.isInteger(normalized.maxConcurrentRequests) || normalized.maxConcurrentRequests <= 0) {
         normalized.maxConcurrentRequests = CONSTANTS.DEFAULT_MAX_CONCURRENT_REQUESTS;
       }
-      if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(normalized.apiMode)) {
+      if (!API_MODES.includes(normalized.apiMode)) {
         normalized.apiMode = DEFAULT_CONFIG.apiMode;
+      }
+      if (normalized.apiMode === 'openai_compatible') {
+        normalized.outputFormat = 'none';
       }
       if (!['Alt', 'Ctrl', 'Shift', 'Meta'].includes(normalized.multipleSelectionModeHotkey)) {
         normalized.multipleSelectionModeHotkey = DEFAULT_CONFIG.multipleSelectionModeHotkey;

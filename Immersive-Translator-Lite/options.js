@@ -2,6 +2,7 @@
 
 const SHARED_CONFIG = window.LocalBlockTranslatorSharedConfig;
 const SETTINGS_SCHEMA_VERSION = SHARED_CONFIG.SETTINGS_SCHEMA_VERSION;
+const API_MODES = SHARED_CONFIG.API_MODES;
 const DEFAULT_CONFIG_BASE = SHARED_CONFIG.DEFAULT_TRANSLATION_CONFIG;
 const FIELD_TYPES = SHARED_CONFIG.FIELD_TYPES;
 const MESSAGE_TYPES = {
@@ -96,10 +97,10 @@ const I18N_TEXT = {
       multipleSelectionMode: '多选模式',
       multipleSelectionModeHotkey: '多选模式按键',
       multipleSelectionMergeRequest: '多选合并请求',
-      temperature: '采样温度',
+      temperature: 'Temperature',
       maxOutputTokens: '最大输出 Token 数',
       maxConcurrentRequests: 'API 并发请求数',
-      requestTimeoutMs: '请求超时时间（毫秒）',
+      requestTimeoutSeconds: 'Request Timeout (Second)',
       maxSegmentsPerRequest: '单次请求最大分段数',
       maxRequestRetries: '最大请求重试次数',
       requestCacheEnabled: '请求缓存',
@@ -107,8 +108,8 @@ const I18N_TEXT = {
       cleanRequestCache: '清空请求缓存',
       outputFormat: '输出格式',
       reasoningEffort: '推理强度',
-      reasoningSummary: '推理摘要级别',
-      geminiCacheEnabled: 'Gemini 缓存',
+      reasoningSummary: 'Reasoning Summary',
+      googleCacheEnabled: 'Google 缓存',
       deepSeekThinkingEnabled: 'DeepSeek 思考模式',
       promptCacheKey: '提示词缓存键（普通模式）',
       promptCacheKeyPlaceholder: '提示词缓存键（占位符模式）',
@@ -134,7 +135,7 @@ const I18N_TEXT = {
       multipleSelectionMode: '按住多选键可连续选择多个 DOM 块',
       multipleSelectionMergeRequest: '松开多选键后将已选块合并翻译请求',
       requestCacheEnabled: '开启请求结果缓存',
-      geminiCacheEnabled: '启用 Gemini System Instructions 缓存',
+      googleCacheEnabled: '启用 Google System Instructions 缓存',
       deepSeekThinkingEnabled: '启用 DeepSeek thinking',
       enableTouchShortcuts: '双击进入、三指取消',
       threeFingerCancelEnabled: '三指触控取消选择模式',
@@ -155,8 +156,9 @@ const I18N_TEXT = {
       apiMode: {
         responses: 'OpenAI Responses',
         chat_completions: 'OpenAI Completions',
+        openai_compatible: 'OpenAI-Compatible',
         deepseek: 'DeepSeek',
-        gemini: 'Gemini'
+        google: 'Google'
       },
       selectionMode: {
         sticky: '连续选择（sticky）',
@@ -268,10 +270,10 @@ const I18N_TEXT = {
       multipleSelectionMode: 'Multiple Selection Mode',
       multipleSelectionModeHotkey: 'Multiple Selection Mode Hotkey',
       multipleSelectionMergeRequest: 'Multiple Selection Merge Request',
-      temperature: 'Sampling Temperature',
+      temperature: 'Temperature',
       maxOutputTokens: 'Max Output Tokens',
       maxConcurrentRequests: 'API Concurrent Requests',
-      requestTimeoutMs: 'Request Timeout (ms)',
+      requestTimeoutSeconds: 'Request Timeout (Second)',
       maxSegmentsPerRequest: 'Max Segments Per Request',
       maxRequestRetries: 'Maximum Request Retries',
       requestCacheEnabled: 'Request Cache',
@@ -279,8 +281,8 @@ const I18N_TEXT = {
       cleanRequestCache: 'Clean Request Cache',
       outputFormat: 'Output Format',
       reasoningEffort: 'Reasoning Effort',
-      reasoningSummary: 'Reasoning Summary Level',
-      geminiCacheEnabled: 'Gemini Cache',
+      reasoningSummary: 'Reasoning Summary',
+      googleCacheEnabled: 'Google Cache',
       deepSeekThinkingEnabled: 'DeepSeek Thinking',
       promptCacheKey: 'Prompt Cache Key (Normal Mode)',
       promptCacheKeyPlaceholder: 'Prompt Cache Key (Placeholder Mode)',
@@ -306,7 +308,7 @@ const I18N_TEXT = {
       multipleSelectionMode: 'Hold a modifier key to select multiple DOM blocks',
       multipleSelectionMergeRequest: 'Merge selected blocks into one translation dispatch on key release',
       requestCacheEnabled: 'Enable request result cache',
-      geminiCacheEnabled: 'Enable Gemini System Instructions cache',
+      googleCacheEnabled: 'Enable Google System Instructions cache',
       deepSeekThinkingEnabled: 'Enable DeepSeek thinking',
       enableTouchShortcuts: 'Double-tap to enter, three-finger to cancel',
       threeFingerCancelEnabled: 'Allow three-finger touch to cancel selection mode',
@@ -327,8 +329,9 @@ const I18N_TEXT = {
       apiMode: {
         responses: 'OpenAI Responses',
         chat_completions: 'OpenAI Completions',
+        openai_compatible: 'OpenAI-Compatible',
         deepseek: 'DeepSeek',
-        gemini: 'Gemini'
+        google: 'Google'
       },
       selectionMode: {
         sticky: 'Sticky (continuous selection)',
@@ -370,7 +373,7 @@ let currentLocale = 'zh';
 let isApiKeyVisible = false;
 
 const OPENAI_REASONING_EFFORT_VALUES = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
-const GEMINI_REASONING_EFFORT_VALUES = ['minimal', 'low', 'medium', 'high'];
+const GOOGLE_REASONING_EFFORT_VALUES = ['minimal', 'low', 'medium', 'high'];
 const DEEPSEEK_REASONING_EFFORT_VALUES = ['high', 'max'];
 
 function normalizeValueByType(rawValue, defaultValue, type) {
@@ -407,8 +410,11 @@ function normalizeSettings(input) {
   if (!['auto', 'concise', 'detailed'].includes(result.translationConfig.reasoningSummary)) {
     result.translationConfig.reasoningSummary = defaults.reasoningSummary;
   }
-  if (!['responses', 'chat_completions', 'deepseek', 'gemini'].includes(result.translationConfig.apiMode)) {
+  if (!API_MODES.includes(result.translationConfig.apiMode)) {
     result.translationConfig.apiMode = defaults.apiMode;
+  }
+  if (result.translationConfig.apiMode === 'openai_compatible') {
+    result.translationConfig.outputFormat = 'none';
   }
   if (!['in_memory', '24h'].includes(result.translationConfig.promptCacheRetention)) {
     result.translationConfig.promptCacheRetention = defaults.promptCacheRetention;
@@ -495,13 +501,13 @@ function applySelectOptionTexts(selectId, optionMap) {
 
 function getReasoningEffortValuesForApiMode(apiMode) {
   if (apiMode === 'deepseek') return DEEPSEEK_REASONING_EFFORT_VALUES;
-  if (apiMode === 'gemini') return GEMINI_REASONING_EFFORT_VALUES;
+  if (apiMode === 'google') return GOOGLE_REASONING_EFFORT_VALUES;
   return OPENAI_REASONING_EFFORT_VALUES;
 }
 
 function getDefaultReasoningEffortForApiMode(apiMode) {
   if (apiMode === 'deepseek') return 'high';
-  if (apiMode === 'gemini') return 'medium';
+  if (apiMode === 'google') return 'medium';
   return DEFAULT_CONFIG_BASE.reasoningEffort;
 }
 
@@ -644,10 +650,17 @@ function applyTheme(themeMode) {
 function applyApiModeVisibility(apiMode) {
   applyReasoningEffortOptions(apiMode);
   const isChatCompletions = apiMode === 'chat_completions';
+  const isOpenAiCompatible = apiMode === 'openai_compatible';
   const isDeepSeek = apiMode === 'deepseek';
-  const isGemini = apiMode === 'gemini';
+  const isGoogle = apiMode === 'google';
   const isDeepSeekThinkingOff =
     isDeepSeek && document.getElementById('deepSeekThinkingEnabled')?.checked === false;
+  if (isOpenAiCompatible) {
+    const outputFormat = document.getElementById('outputFormat');
+    if (outputFormat) {
+      outputFormat.value = 'none';
+    }
+  }
 
   const reasoningEffortFields = document.querySelectorAll('[data-reasoning-effort-field="true"]');
   for (const field of reasoningEffortFields) {
@@ -656,12 +669,12 @@ function applyApiModeVisibility(apiMode) {
 
   const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
   for (const field of responsesOnlyFields) {
-    field.hidden = isChatCompletions || isDeepSeek || isGemini;
+    field.hidden = isChatCompletions || isOpenAiCompatible || isDeepSeek || isGoogle;
   }
 
-  const geminiOnlyFields = document.querySelectorAll('[data-gemini-only="true"]');
-  for (const field of geminiOnlyFields) {
-    field.hidden = !isGemini;
+  const googleOnlyFields = document.querySelectorAll('[data-google-only="true"]');
+  for (const field of googleOnlyFields) {
+    field.hidden = !isGoogle;
   }
 
   const deepSeekOnlyFields = document.querySelectorAll('[data-deepseek-only="true"]');
@@ -671,12 +684,17 @@ function applyApiModeVisibility(apiMode) {
 
   const noPromptCacheFields = document.querySelectorAll('[data-no-prompt-cache="true"]');
   for (const field of noPromptCacheFields) {
-    field.hidden = isGemini || isDeepSeek;
+    field.hidden = isGoogle || isDeepSeek || isOpenAiCompatible;
   }
 
   const deepSeekHiddenFields = document.querySelectorAll('[data-deepseek-hidden="true"]');
   for (const field of deepSeekHiddenFields) {
-    field.hidden = isDeepSeek;
+    field.hidden = isDeepSeek || isOpenAiCompatible;
+  }
+
+  const openAiCompatibleHiddenFields = document.querySelectorAll('[data-openai-compatible-hidden="true"]');
+  for (const field of openAiCompatibleHiddenFields) {
+    field.hidden = isOpenAiCompatible;
   }
 }
 
@@ -765,15 +783,16 @@ async function testConnection(config) {
   const apiBaseUrl = String(config.apiBaseUrl || '').trim();
   const apiKey = String(config.apiKey || '').trim();
   const model = String(config.model || '').trim();
-  const apiMode = ['responses', 'chat_completions', 'deepseek', 'gemini'].includes(config.apiMode) ? config.apiMode : 'responses';
+  const apiMode = API_MODES.includes(config.apiMode) ? config.apiMode : 'responses';
 
   if (!apiBaseUrl || !apiKey || !model) {
     throw new Error(getTextBundle().status.connectionMissingConfig);
   }
 
-  const timeoutMs = Number.isFinite(config.requestTimeoutMs) && config.requestTimeoutMs > 0
-    ? config.requestTimeoutMs
-    : DEFAULT_CONFIG_BASE.requestTimeoutMs;
+  const timeoutSeconds = Number.isFinite(config.requestTimeoutSeconds) && config.requestTimeoutSeconds > 0
+    ? config.requestTimeoutSeconds
+    : DEFAULT_CONFIG_BASE.requestTimeoutSeconds;
+  const timeoutMs = timeoutSeconds * 1000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   validateConnectionTestBaseUrl(apiBaseUrl);
@@ -879,20 +898,23 @@ function validateConnectionTestBaseUrl(apiBaseUrl) {
 
 function buildConnectionTestEndpoint(apiBaseUrl, model, apiMode) {
   const baseUrl = apiBaseUrl.replace(/\/$/, '');
-  if (apiMode === 'gemini') {
-    return `${baseUrl}/${formatGeminiModelPath(model)}:generateContent`;
+  if (apiMode === 'google') {
+    return `${baseUrl}/${formatGoogleModelPath(model)}:generateContent`;
   }
-  const endpointPath = apiMode === 'chat_completions' || apiMode === 'deepseek' ? 'chat/completions' : 'responses';
+  const endpointPath =
+    apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek'
+      ? 'chat/completions'
+      : 'responses';
   return `${baseUrl}/${endpointPath}`;
 }
 
-function formatGeminiModelPath(model) {
+function formatGoogleModelPath(model) {
   const trimmed = String(model || '').trim().replace(/^\/+/, '');
   return trimmed.startsWith('models/') ? trimmed : `models/${trimmed}`;
 }
 
 function buildConnectionTestRequestBody(model, apiMode, config) {
-  if (apiMode === 'gemini') {
+  if (apiMode === 'google') {
     return {
       contents: [
         {
@@ -904,6 +926,29 @@ function buildConnectionTestRequestBody(model, apiMode, config) {
         maxOutputTokens: 16
       }
     };
+  }
+
+  if (apiMode === 'openai_compatible') {
+    const requestBody = {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant.'
+        },
+        {
+          role: 'user',
+          content: 'ping'
+        }
+      ],
+      temperature: Number.isFinite(config?.temperature) ? config.temperature : DEFAULT_CONFIG_BASE.temperature,
+      max_tokens: 16
+    };
+    const reasoningEffort = String(config?.reasoningEffort || '').trim().toLowerCase();
+    if (reasoningEffort && reasoningEffort !== 'none') {
+      requestBody.reasoning_effort = reasoningEffort;
+    }
+    return requestBody;
   }
 
   if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
@@ -941,7 +986,7 @@ function buildConnectionTestHeaders(apiKey, apiMode) {
   const headers = {
     'Content-Type': 'application/json'
   };
-  if (apiMode === 'gemini') {
+  if (apiMode === 'google') {
     headers['x-goog-api-key'] = apiKey;
   } else {
     headers.Authorization = `Bearer ${apiKey}`;
@@ -955,9 +1000,9 @@ function validateConnectionTestResponse(json, apiMode) {
   }
 
   let isValid = false;
-  if (apiMode === 'gemini') {
+  if (apiMode === 'google') {
     isValid = Array.isArray(json.candidates);
-  } else if (apiMode === 'chat_completions' || apiMode === 'deepseek') {
+  } else if (apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek') {
     isValid =
       Array.isArray(json.choices) &&
       json.choices.some((choice) => {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Immersive Translator Lite",
   "version": "0.0.3",
-  "description": "Block-level immersive translator powered by OpenAI, Gemini, and DeepSeek LLM APIs.",
+  "description": "Block-level immersive translator powered by OpenAI, Google, and DeepSeek LLM APIs.",
   "permissions": [
     "storage",
     "tabs",

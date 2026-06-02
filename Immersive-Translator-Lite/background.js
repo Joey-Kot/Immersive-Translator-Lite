@@ -9,7 +9,7 @@ const MESSAGE_TYPES = {
   API_REQUEST: 'API_REQUEST'
 };
 const REQUEST_CACHE_STORAGE_PREFIX = 'lit_request_cache_v1_';
-const API_REQUEST_TIMEOUT_MS = 120000;
+const API_REQUEST_TIMEOUT_MS = 120 * 1000;
 
 async function sendToggleToAllFrames(tabId) {
   let frames = [];
@@ -173,7 +173,7 @@ async function proxyApiRequest(payload) {
     return {
       ok: false,
       error: error?.name === 'AbortError'
-        ? `API request timed out after ${request.timeoutMs}ms`
+        ? `API request timed out after ${Math.round(request.timeoutMs / 1000)}s`
         : String(error?.message || error)
     };
   } finally {

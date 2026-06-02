@@ -2,6 +2,7 @@
   'use strict';
 
   const SETTINGS_SCHEMA_VERSION = 1;
+  const API_MODES = ['responses', 'chat_completions', 'openai_compatible', 'deepseek', 'google'];
   const DEFAULT_PROMPT_CACHE_KEY = '188f6fd3-49ea-4f63-ae50-b87cf9574a1a';
   const DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER = '111acfce-6ac6-4373-bdcb-61455403f3af';
 
@@ -94,7 +95,7 @@
     sourceLang: 'Any Language',
     targetLang: 'Chinese Simplified',
     responseInstructions: DEFAULT_RESPONSE_INSTRUCTIONS,
-    geminiCacheEnabled: true,
+    googleCacheEnabled: true,
     deepSeekThinkingEnabled: true,
     promptCacheKey: DEFAULT_PROMPT_CACHE_KEY,
     promptCacheKeyPlaceholder: DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER,
@@ -125,7 +126,7 @@
     selectionMode: 'sticky',
     notifyOnDuplicateSelection: true,
     scriptBuildId: '',
-    requestTimeoutMs: 60000,
+    requestTimeoutSeconds: 60,
     temperature: 0,
     maxOutputTokens: 128000,
     injectIntoIframes: true
@@ -139,7 +140,7 @@
     sourceLang: 'string',
     targetLang: 'string',
     responseInstructions: 'string',
-    geminiCacheEnabled: 'boolean',
+    googleCacheEnabled: 'boolean',
     deepSeekThinkingEnabled: 'boolean',
     promptCacheKey: 'string',
     promptCacheKeyPlaceholder: 'string',
@@ -170,7 +171,7 @@
     selectionMode: 'string',
     notifyOnDuplicateSelection: 'boolean',
     scriptBuildId: 'string',
-    requestTimeoutMs: 'number',
+    requestTimeoutSeconds: 'number',
     temperature: 'number',
     maxOutputTokens: 'number',
     injectIntoIframes: 'boolean'
@@ -209,6 +210,7 @@
 
   window.LocalBlockTranslatorSharedConfig = {
     SETTINGS_SCHEMA_VERSION,
+    API_MODES,
     DEFAULT_RESPONSE_INSTRUCTIONS,
     DEFAULT_TRANSLATION_CONFIG,
     FIELD_TYPES,
