@@ -9,6 +9,9 @@
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
   const DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK = true;
   const GEMINI_SYSTEM_CACHE_STORAGE_PREFIX = 'lit_gemini_system_cache_v1_';
+  const MESSAGE_TYPES = {
+    API_REQUEST: 'API_REQUEST'
+  };
 
   function createApiClient(deps) {
     const CONFIG = deps.config;
@@ -545,7 +548,7 @@
         fetchOptions.signal = signal;
       }
 
-      const response = await fetch(endpoint, fetchOptions);
+      const response = await sendApiRequestViaBackground(endpoint, fetchOptions, CONFIG.requestTimeoutMs);
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '');
@@ -557,6 +560,70 @@
         console.info('[LocalBlockTranslator] response JSON:\n' + JSON.stringify(json, null, 2));
       }
       return json;
+    }
+
+    async function sendApiRequestViaBackground(endpoint, fetchOptions, timeoutMs) {
+      if (!chrome?.runtime?.sendMessage) {
+        throw new Error('Extension background API proxy is unavailable.');
+      }
+
+      const signal = fetchOptions.signal;
+      if (signal?.aborted) {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
+
+      let abortHandler = null;
+      const abortPromise = new Promise((_, reject) => {
+        if (!signal) return;
+        abortHandler = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+        signal.addEventListener('abort', abortHandler, { once: true });
+      });
+
+      const requestPromise = chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.API_REQUEST,
+        payload: {
+          endpoint,
+          method: fetchOptions.method || 'POST',
+          headers: fetchOptions.headers || {},
+          body: fetchOptions.body,
+          timeoutMs
+        }
+      });
+
+      let proxyResult = null;
+      try {
+        proxyResult = await Promise.race(signal ? [requestPromise, abortPromise] : [requestPromise]);
+      } finally {
+        if (signal && abortHandler) {
+          signal.removeEventListener('abort', abortHandler);
+        }
+      }
+
+      if (!proxyResult?.ok) {
+        throw new Error(proxyResult?.error || 'Extension background API proxy failed.');
+      }
+
+      return createProxyResponse(proxyResult.response);
+    }
+
+    function createProxyResponse(responsePayload) {
+      const payload = responsePayload && typeof responsePayload === 'object' ? responsePayload : {};
+      return {
+        ok: Boolean(payload.ok),
+        status: Number.isFinite(payload.status) ? payload.status : 0,
+        statusText: typeof payload.statusText === 'string' ? payload.statusText : '',
+        headers: payload.headers || {},
+        async text() {
+          return typeof payload.text === 'string' ? payload.text : '';
+        },
+        async json() {
+          if (payload.json !== null && typeof payload.json !== 'undefined') {
+            return payload.json;
+          }
+          const text = typeof payload.text === 'string' ? payload.text : '';
+          return JSON.parse(text);
+        }
+      };
     }
 
     function buildApiRequestHeaders(apiMode) {

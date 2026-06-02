@@ -5,9 +5,11 @@ const MESSAGE_TYPES = {
   SETTINGS_UPDATED: 'SETTINGS_UPDATED',
   PING_FRAME_STATUS: 'PING_FRAME_STATUS',
   FRAME_READY: 'FRAME_READY',
-  CLEAR_REQUEST_CACHE: 'CLEAR_REQUEST_CACHE'
+  CLEAR_REQUEST_CACHE: 'CLEAR_REQUEST_CACHE',
+  API_REQUEST: 'API_REQUEST'
 };
 const REQUEST_CACHE_STORAGE_PREFIX = 'lit_request_cache_v1_';
+const API_REQUEST_TIMEOUT_MS = 120000;
 
 async function sendToggleToAllFrames(tabId) {
   let frames = [];
@@ -84,6 +86,101 @@ async function clearRequestCacheStorage() {
   return keys.length;
 }
 
+function validateApiRequestPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid API request payload');
+  }
+
+  const endpoint = String(payload.endpoint || '').trim();
+  let url = null;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new Error('Invalid API endpoint URL');
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('API endpoint must use http or https');
+  }
+
+  const method = String(payload.method || 'POST').toUpperCase();
+  if (!['GET', 'POST'].includes(method)) {
+    throw new Error(`Unsupported API request method: ${method}`);
+  }
+
+  const headers = payload.headers && typeof payload.headers === 'object' ? payload.headers : {};
+  const sanitizedHeaders = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof key !== 'string' || !key.trim()) continue;
+    if (typeof value === 'undefined' || value === null) continue;
+    sanitizedHeaders[key] = String(value);
+  }
+
+  const timeoutMs = Number.isFinite(payload.timeoutMs) && payload.timeoutMs > 0
+    ? Math.min(payload.timeoutMs, API_REQUEST_TIMEOUT_MS)
+    : API_REQUEST_TIMEOUT_MS;
+
+  return {
+    endpoint: url.href,
+    method,
+    headers: sanitizedHeaders,
+    body: typeof payload.body === 'undefined' ? undefined : payload.body,
+    timeoutMs
+  };
+}
+
+async function proxyApiRequest(payload) {
+  const request = validateApiRequestPayload(payload);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), request.timeoutMs);
+
+  try {
+    const fetchOptions = {
+      method: request.method,
+      headers: request.headers,
+      signal: controller.signal
+    };
+
+    if (request.method !== 'GET' && typeof request.body !== 'undefined') {
+      fetchOptions.body = typeof request.body === 'string' ? request.body : JSON.stringify(request.body);
+    }
+
+    const response = await fetch(request.endpoint, fetchOptions);
+    const responseText = await response.text().catch(() => '');
+    let json = null;
+    let jsonParseError = '';
+    if (responseText) {
+      try {
+        json = JSON.parse(responseText);
+      } catch (error) {
+        jsonParseError = String(error?.message || error);
+      }
+    }
+
+    return {
+      ok: true,
+      response: {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        text: responseText,
+        json,
+        jsonParseError
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.name === 'AbortError'
+        ? `API request timed out after ${request.timeoutMs}ms`
+        : String(error?.message || error)
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab?.id) return;
   await sendToggleToAllFrames(tab.id);
@@ -115,6 +212,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('[LIT Background] clear cache failed:', error);
       sendResponse({ ok: false, error: String(error?.message || error) });
     });
+    return true;
+  }
+
+  if (message.type === MESSAGE_TYPES.API_REQUEST) {
+    proxyApiRequest(message.payload)
+      .then(sendResponse)
+      .catch((error) => {
+        console.error('[LIT Background] API proxy failed:', error);
+        sendResponse({ ok: false, error: String(error?.message || error) });
+      });
     return true;
   }
 });
