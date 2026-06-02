@@ -1,16 +1,12 @@
 # Immersive Translator Lite
 
-一个轻量的沉浸式网页翻译工具，支持 **Chrome Extension** 和 **UserScript** 两种形态。
-
-当前主线是 Chrome 插件版：配置完整、Provider 支持更丰富，包含缓存、批处理、连通性测试、导入导出等功能。UserScript 版本保留为轻量方案，适合简单场景或不方便安装插件时使用。
+一个独特设计的沉浸式网页翻译工具，当前维护版本为 **Chrome Extension**，油猴脚本 / UserScript 版本已不再维护。
 
 ## 1. 支持功能及特性
 
-### 1.1 Chrome 插件版
-
 Chrome 插件版是目前推荐使用的版本，主要支持：
 
-- **多 Provider 支持**：可在设置页选择 `OpenAI Responses`、`OpenAI Completions`、`Gemini`、`DeepSeek`。
+- **多 Provider 支持**：可在设置页选择 `OpenAI Responses`、`OpenAI Completions`、`OpenAI-Compatible`、`DeepSeek`、`Qwen`、`Google`。
 - **完整设置页**：按 `System / Language / API / Request / Hotkey / Debug` 分组管理配置。
 - **连接测试**：可在模型配置旁直接测试 API 连通性，成功后显示绿色勾选状态。
 - **配置导入导出**：支持 JSON 格式导入/导出配置；导入前会二次确认，避免误覆盖当前配置。
@@ -19,22 +15,11 @@ Chrome 插件版是目前推荐使用的版本，主要支持：
 - **多选批处理**：按住多选修饰键连续选择多个 DOM 块，松开后统一发起翻译。
 - **分批与并发控制**：可配置单次请求最大分段数、API 并发请求数、请求超时与最大重试次数。
 - **请求结果缓存**：可缓存分批翻译结果，重复翻译相同内容时减少 API 请求。
-- **Provider 缓存能力**：OpenAI 支持 Prompt Cache 相关配置；Gemini 支持独立的 System Instructions 缓存开关。
+- **Provider 缓存能力**：OpenAI、Google 支持显式缓存开关。
 - **结构化输出与自动降级**：默认使用结构化输出提升稳定性，不兼容时可自动降级重试。
 - **复杂 DOM 兼容**：对 custom elements 和高风险重排块自动启用 fallback，降低页面结构错位概率。
-- **移动端手势**：支持双击进入选择模式、三指取消。
+- **移动端手势**：支持双击进入选择模式、三指取消（油猴脚本+移动端使用）。
 - **调试能力**：可分别开启流程日志、请求日志、响应日志、热键日志和重排日志。
-- **按钮点击反馈**：设置页按钮带点击反馈，避免操作时没有感知。
-
-### 1.2 UserScript 版本
-
-UserScript 版本功能更轻，主要用于基础翻译场景：
-
-- 仅支持 `OpenAI Responses` 这个 Provider。
-- 不包含插件版完整设置页和部分高级配置。
-- 与插件版相比，Provider 选择、连接测试、配置导入导出、Gemini/DeepSeek 支持、部分缓存与调试能力都不完整。
-
-如果你希望获得完整体验，建议优先使用 Chrome 插件版。
 
 ## 2. 设计思路
 
@@ -59,14 +44,14 @@ UserScript 版本功能更轻，主要用于基础翻译场景：
 - **性能可控**：超出 `maxSegmentsPerRequest` 自动拆分，并可通过 `maxConcurrentRequests` 控制并发数量。
 - **重复请求可削减**：请求缓存基于 `segments + model + 语言方向 + 指令 + placeholder` 生成键，避免同请求重复请求。
 - **缓存收益可持续**：请求前缀尽量保持稳定且足够长，便于命中 Prompt Cache。
-- **调试效率**：把日志按热键/流程/reorder/请求/响应拆分，按需开启，不强制污染控制台。
+- **调试效率**：把日志按热键/流程/reorder/请求/响应拆分，按需开启，不污染控制台。
 
 ### 2.3 核心流程与实现方式
 
 1. **进入与退出选择模式**
 - 键盘热键默认 `Alt+KeyA` 进入/退出。
 - `Esc` 或鼠标右键点击可退出选择模式。
-- 触屏默认支持双击进入、三指取消。
+- 触屏默认支持双击进入、三指取消（油猴脚本+移动端使用）。
 - 新增指针取消手势：右键或 `Ctrl+左键` 可快速取消选择模式。
 - 多选模式开启时，按住多选修饰键（默认 `Alt`）并点击可连续收集多个块，松开按键后批量翻译。
 
@@ -91,8 +76,6 @@ UserScript 版本功能更轻，主要用于基础翻译场景：
 - 已翻译区域再次点击可在原文/译文之间切换。
 - 新任务开始前会清理旧翻译痕迹，避免重复堆叠。
 
----
-
 ## 3. 安装方式
 
 ### 3.1 Chrome Web Store 安装（推荐）
@@ -107,37 +90,7 @@ UserScript 版本功能更轻，主要用于基础翻译场景：
 4. 选择目录：`Immersive-Translator-Lite`。
 5. 打开扩展的 `Options` 页面，填写 API 与翻译参数后保存。
 
-说明：扩展设置页已按 `System / Language / API / Request / Hotkey / Debug` 分组，便于快速定位配置项。
-
-### 3.3 UserScript 安装
-
-支持任何兼容 UserScript 的扩展，常见包括：
-
-- Tampermonkey
-- Violentmonkey
-- ScriptCat
-- Greasemonkey（部分新 API 行为可能有差异）
-
-通用步骤：
-
-1. 浏览器安装任一脚本管理器扩展。
-2. 新建脚本。
-3. 将 `Tampermonkey/lite_immersive_translation.js` 全量粘贴后保存。
-4. 配置 API 参数并启用脚本。
-5. 刷新目标网页。
-
-说明：UserScript 版本仅支持 `OpenAI Responses`，功能覆盖不如 Chrome 插件版完整。
-
-### 3.4 匹配范围
-
-默认是全站匹配：
-
-- UserScript：`@match *://*/*`
-- Chrome Extension：`"matches": ["<all_urls>"]`
-
-建议按需收敛到目标域名，减少误触发。
-
----
+扩展设置页已按 `System / Language / API / Request / Hotkey / Debug` 分组，便于快速定位配置项。
 
 ## 4. 使用方式
 
@@ -153,24 +106,10 @@ Chrome 插件版还可以在设置页选择 `API Provider`，当前支持：
 
 - `OpenAI Responses`
 - `OpenAI Completions`
-- `Gemini`
+- `OpenAI-Compatible`
 - `DeepSeek`
-
-推荐最小配置示例：
-
-```js
-const CONFIG = {
-  apiBaseUrl: 'https://api.example.com/v1',
-  apiKey: 'sk-xxxx',
-  model: 'gpt-5.1',
-  sourceLang: 'Any Language',
-  targetLang: 'Chinese Simplified',
-  hotkey: 'Alt+KeyA',
-  promptCacheKey: '188f6fd3-49ea-4f63-ae50-b87cf9574a1a',
-  promptCacheKeyPlaceholder: '111acfce-6ac6-4373-bdcb-61455403f3af',
-  debugProcessLog: true
-};
-```
+- `Qwen`
+- `Google`
 
 ### 4.2 快捷键与手势
 
@@ -181,7 +120,7 @@ const CONFIG = {
 - 按住多选键（默认 `Alt`）并连续点击多个块：加入批量选择
 - 松开多选键：触发批量翻译（可配置为合并请求）
 
-手势触控（仅移动端可用）：
+手势触控（仅油猴脚本移动端可用）：
 
 - 双击：进入/退出选择模式
 - 三指触控：取消选择模式
@@ -193,58 +132,24 @@ const CONFIG = {
 3. 等待右下角 Toast 显示 `Translated N segment(s).`。
 4. 再次点击同一区域，在原文/译文之间切换。
 
-### 4.4 常用配置项说明
+### 4.4 特殊配置说明
 
-高频项：
+**Qwen Provider 说明：**
 
-- `apiMode`：内部配置字段，对应设置页的 `API Provider`。
-- `targetLang`：目标语言（如 `Chinese Simplified`）。
-- `responseInstructions`：额外系统翻译要求；留空时使用默认规则。
-- `selectionMode`：
-  - `sticky`：连续选择（默认）
-  - `manual`：每次翻译后退出选择模式
-- `multipleSelectionMode`：是否启用按修饰键连续多选。
-- `multipleSelectionModeHotkey`：多选修饰键（`Alt` / `Ctrl` / `Shift` / `Meta`）。
-- `multipleSelectionMergeRequest`：松开多选键后，是否将多个块合并成一次翻译调度（内部仍会按 `maxSegmentsPerRequest` 分批）。
-- `notifyOnDuplicateSelection`：重复选中同一正在翻译块时是否提示。
-- `requestTimeoutMs`：单次请求超时毫秒。
-- `maxSegmentsPerRequest`：单次请求最多携带的段数，超限会自动分批。
-- `maxConcurrentRequests`：分批后最多同时发起的 API 请求数，默认 `10`。
-- `maxRequestRetries`：单个请求失败后的最大重试次数（默认 `3`）。仅对可恢复错误触发指数退避重试（如超时、`429`、`5xx`、解析失败、`Segment length mismatch` 等）。
-- `requestCacheEnabled`：是否启用请求结果缓存。
-- `requestCacheTimeoutHours`：请求缓存过期时间（小时）。
-- 选项页支持 `Clean Request Cache / 清空请求缓存`，用于主动失效全部缓存。
-- `temperature`：翻译建议 `0`。
-- `outputFormat`：
-  - `json_schema`（默认，结构最稳）
-  - `none`（不强制结构化）
-- `structuredOutputAutoFallback`：结构化输出失败时自动降级重试。
-- `promptCacheKey`：普通翻译请求使用的 Prompt Cache 键。
-- `promptCacheKeyPlaceholder`：占位符重排请求使用的 Prompt Cache 键。
-- `Prompt Cache` 使用前提：翻译规则前缀需要稳定且长度足够（过短或频繁变化会降低命中率）；默认内置提示词通常已足够长。
-- `showLauncher`：右下角显示 `Translate` 调试按钮（独立开关，不依赖 `debugHotkey`）。
-- `debugProcessLog`：输出分批、校验、合并、fallback 等流程日志。
-- `debugRequestLog`：输出完整请求体 JSON。
-- `debugResponseLog`：输出完整响应 JSON。
-- `debugHotkey` / `debugReorder`：分别控制热键与重排相关调试日志。
-
----
-
-## 5. 注意事项
-
-- 必须配置 `apiKey`，否则请求前会直接报错。
-- 若接口不兼容结构化输出，建议保持 `structuredOutputAutoFallback: true`。
-- 页面动态更新频繁时，建议先在小范围块上验证效果。
-- 遇到强交互区域可再次点击切回原文，再调整选择范围重试。
-- UserScript 版本仅支持 `OpenAI Responses`，如需多 Provider 和完整设置能力，请使用 Chrome 插件版。
-
----
+- `Qwen` 走 DashScope REST 接口，请在 `API Endpoint URL` 中填写完整 endpoint，而不是 base URL。
+- 纯文本模型（如 `qwen-plus`）使用：
+  `https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation`
+- 多模态模型（如 `qwen3.7-plus` 或 `qwen3-vl-plus`）使用：
+  `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`
+- `Qwen Thinking` 默认关闭；开启后会发送 `enable_thinking`、`thinking_budget`，其中 `Thinking Budget` 默认 `0`。
+- Qwen 模式下的 `Reasoning Effort` 会发送为 DashScope `reasoning_effort`，该参数用于控制 DeepSeek-V4 系列推理力度。
+- Qwen 的结构化输出不支持 JSON Schema；当 `Output Format` 选择结构化 JSON 时，插件会使用 `response_format: { "type": "json_object" }`，并在系统提示词末尾追加 JSON 输出格式要求。
 
 ## 6. 故障排查
 
 ### 6.1 按快捷键没反应
 
-- 检查脚本/扩展是否启用。
+- 检查扩展是否启用。
 - 检查热键是否被系统或浏览器占用。
 - 尝试改成 `Ctrl+Shift+KeyA` 等组合。
 

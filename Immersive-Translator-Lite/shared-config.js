@@ -2,7 +2,7 @@
   'use strict';
 
   const SETTINGS_SCHEMA_VERSION = 1;
-  const API_MODES = ['responses', 'chat_completions', 'openai_compatible', 'deepseek', 'google'];
+  const API_MODES = ['responses', 'chat_completions', 'openai_compatible', 'deepseek', 'qwen', 'google'];
   const DEFAULT_PROMPT_CACHE_KEY = '188f6fd3-49ea-4f63-ae50-b87cf9574a1a';
   const DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER = '111acfce-6ac6-4373-bdcb-61455403f3af';
 
@@ -97,6 +97,8 @@
     responseInstructions: DEFAULT_RESPONSE_INSTRUCTIONS,
     googleCacheEnabled: true,
     deepSeekThinkingEnabled: true,
+    qwenThinkingEnabled: false,
+    qwenThinkingBudget: 0,
     promptCacheKey: DEFAULT_PROMPT_CACHE_KEY,
     promptCacheKeyPlaceholder: DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER,
     promptCacheRetention: '24h',
@@ -142,6 +144,8 @@
     responseInstructions: 'string',
     googleCacheEnabled: 'boolean',
     deepSeekThinkingEnabled: 'boolean',
+    qwenThinkingEnabled: 'boolean',
+    qwenThinkingBudget: 'number',
     promptCacheKey: 'string',
     promptCacheKeyPlaceholder: 'string',
     promptCacheRetention: 'string',

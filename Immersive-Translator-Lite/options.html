@@ -52,6 +52,7 @@
                   <option value="chat_completions">OpenAI Completions</option>
                   <option value="openai_compatible">OpenAI-Compatible</option>
                   <option value="deepseek">DeepSeek</option>
+                  <option value="qwen">Qwen</option>
                   <option value="google">Google</option>
                 </select>
               </label>
@@ -124,6 +125,20 @@
                   <span class="switch"></span>
                   <span class="switch-text">启用 DeepSeek thinking</span>
                 </span>
+              </label>
+
+              <label class="field switch-field" data-qwen-only="true">
+                <span class="label">Qwen Thinking</span>
+                <span class="switch-wrap">
+                  <input id="qwenThinkingEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">启用 Qwen thinking</span>
+                </span>
+              </label>
+
+              <label class="field" data-qwen-thinking-only="true">
+                <span class="label">Thinking Budget</span>
+                <input id="qwenThinkingBudget" type="number" step="1" min="1" />
               </label>
 
               <label class="field" data-reasoning-effort-field="true">

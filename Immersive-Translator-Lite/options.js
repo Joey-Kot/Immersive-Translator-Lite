@@ -72,7 +72,9 @@ const I18N_TEXT = {
       cacheClearFailedPrefix: '清空缓存失败',
       initFailedPrefix: '初始化失败',
       apiEndpointPreviewLabel: '完整请求地址',
-      apiEndpointPreviewEmpty: '填写 API 端点地址后会显示自动拼接的完整请求地址。'
+      apiEndpointPreviewEmpty: '填写 API 端点地址后会显示自动拼接的完整请求地址。',
+      qwenEndpointPreviewEmpty:
+        'Qwen 需要填写完整 API Endpoint URL，例如纯文本 generation 或多模态 generation 地址。'
     },
     dialogs: {
       resetTitle: '确认重置设置',
@@ -111,6 +113,8 @@ const I18N_TEXT = {
       reasoningSummary: 'Reasoning Summary',
       googleCacheEnabled: 'Google 缓存',
       deepSeekThinkingEnabled: 'DeepSeek 思考模式',
+      qwenThinkingEnabled: 'Qwen Thinking',
+      qwenThinkingBudget: 'Thinking Budget',
       promptCacheKey: '提示词缓存键（普通模式）',
       promptCacheKeyPlaceholder: '提示词缓存键（占位符模式）',
       promptCacheRetention: '缓存保留时长',
@@ -137,6 +141,7 @@ const I18N_TEXT = {
       requestCacheEnabled: '开启请求结果缓存',
       googleCacheEnabled: '启用 Google System Instructions 缓存',
       deepSeekThinkingEnabled: '启用 DeepSeek thinking',
+      qwenThinkingEnabled: '启用 Qwen thinking',
       enableTouchShortcuts: '双击进入、三指取消',
       threeFingerCancelEnabled: '三指触控取消选择模式',
       notifyOnDuplicateSelection: '重复选中时提示',
@@ -146,6 +151,18 @@ const I18N_TEXT = {
       debugReorder: '输出重排翻译调试日志',
       debugRequestLog: '输出完整请求体 JSON 到控制台',
       debugResponseLog: '输出完整返回值 JSON 到控制台'
+    },
+    tooltips: {
+      qwenApiEndpoint:
+        '纯文本模型（如 qwen-plus）：https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation\n多模态模型（如 qwen3.7-plus 或 qwen3-vl-plus）：https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      qwenThinkingBudget:
+        '用于 Qwen3.7、Qwen3.6、Qwen3.5、Qwen3-VL、Qwen3 的商业版与开源版模型。',
+      reasoningEffort: 'Qwen Provider 下该参数用于控制 DeepSeek-V4 系列的推理力度。'
+    },
+    placeholders: {
+      apiBaseUrl: 'https://api.example.com/v1',
+      qwenApiEndpoint:
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
     },
     options: {
       uiTheme: {
@@ -158,6 +175,7 @@ const I18N_TEXT = {
         chat_completions: 'OpenAI Completions',
         openai_compatible: 'OpenAI-Compatible',
         deepseek: 'DeepSeek',
+        qwen: 'Qwen',
         google: 'Google'
       },
       selectionMode: {
@@ -245,7 +263,9 @@ const I18N_TEXT = {
       cacheClearFailedPrefix: 'Clear cache failed',
       initFailedPrefix: 'Initialization failed',
       apiEndpointPreviewLabel: 'Full Request URL',
-      apiEndpointPreviewEmpty: 'Enter an API endpoint URL to preview the full request URL.'
+      apiEndpointPreviewEmpty: 'Enter an API endpoint URL to preview the full request URL.',
+      qwenEndpointPreviewEmpty:
+        'Qwen requires the complete API Endpoint URL, such as the text generation or multimodal generation endpoint.'
     },
     dialogs: {
       resetTitle: 'Confirm Reset',
@@ -284,6 +304,8 @@ const I18N_TEXT = {
       reasoningSummary: 'Reasoning Summary',
       googleCacheEnabled: 'Google Cache',
       deepSeekThinkingEnabled: 'DeepSeek Thinking',
+      qwenThinkingEnabled: 'Qwen Thinking',
+      qwenThinkingBudget: 'Thinking Budget',
       promptCacheKey: 'Prompt Cache Key (Normal Mode)',
       promptCacheKeyPlaceholder: 'Prompt Cache Key (Placeholder Mode)',
       promptCacheRetention: 'Cache Retention Duration',
@@ -310,6 +332,7 @@ const I18N_TEXT = {
       requestCacheEnabled: 'Enable request result cache',
       googleCacheEnabled: 'Enable Google System Instructions cache',
       deepSeekThinkingEnabled: 'Enable DeepSeek thinking',
+      qwenThinkingEnabled: 'Enable Qwen thinking',
       enableTouchShortcuts: 'Double-tap to enter, three-finger to cancel',
       threeFingerCancelEnabled: 'Allow three-finger touch to cancel selection mode',
       notifyOnDuplicateSelection: 'Show warning for duplicate selections',
@@ -319,6 +342,18 @@ const I18N_TEXT = {
       debugReorder: 'Print reorder debug logs',
       debugRequestLog: 'Print full request body JSON to console',
       debugResponseLog: 'Print full response JSON to console'
+    },
+    tooltips: {
+      qwenApiEndpoint:
+        'Text models, such as qwen-plus: https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation\nMultimodal models, such as qwen3.7-plus or qwen3-vl-plus: https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      qwenThinkingBudget:
+        'For Qwen3.7, Qwen3.6, Qwen3.5, Qwen3-VL, and Qwen3 commercial/open-source models.',
+      reasoningEffort: 'For Qwen Provider, this DashScope parameter controls DeepSeek-V4 reasoning effort.'
+    },
+    placeholders: {
+      apiBaseUrl: 'https://api.example.com/v1',
+      qwenApiEndpoint:
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
     },
     options: {
       uiTheme: {
@@ -331,6 +366,7 @@ const I18N_TEXT = {
         chat_completions: 'OpenAI Completions',
         openai_compatible: 'OpenAI-Compatible',
         deepseek: 'DeepSeek',
+        qwen: 'Qwen',
         google: 'Google'
       },
       selectionMode: {
@@ -375,6 +411,7 @@ let isApiKeyVisible = false;
 const OPENAI_REASONING_EFFORT_VALUES = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 const GOOGLE_REASONING_EFFORT_VALUES = ['minimal', 'low', 'medium', 'high'];
 const DEEPSEEK_REASONING_EFFORT_VALUES = ['high', 'max'];
+const QWEN_REASONING_EFFORT_VALUES = ['high', 'max'];
 
 function normalizeValueByType(rawValue, defaultValue, type) {
   if (type === 'boolean') {
@@ -415,6 +452,12 @@ function normalizeSettings(input) {
   }
   if (result.translationConfig.apiMode === 'openai_compatible') {
     result.translationConfig.outputFormat = 'none';
+  }
+  if (
+    !Number.isFinite(result.translationConfig.qwenThinkingBudget) ||
+    result.translationConfig.qwenThinkingBudget <= 0
+  ) {
+    result.translationConfig.qwenThinkingBudget = defaults.qwenThinkingBudget;
   }
   if (!['in_memory', '24h'].includes(result.translationConfig.promptCacheRetention)) {
     result.translationConfig.promptCacheRetention = defaults.promptCacheRetention;
@@ -745,12 +788,14 @@ function applySelectOptionTexts(selectId, optionMap) {
 
 function getReasoningEffortValuesForApiMode(apiMode) {
   if (apiMode === 'deepseek') return DEEPSEEK_REASONING_EFFORT_VALUES;
+  if (apiMode === 'qwen') return QWEN_REASONING_EFFORT_VALUES;
   if (apiMode === 'google') return GOOGLE_REASONING_EFFORT_VALUES;
   return OPENAI_REASONING_EFFORT_VALUES;
 }
 
 function getDefaultReasoningEffortForApiMode(apiMode) {
   if (apiMode === 'deepseek') return 'high';
+  if (apiMode === 'qwen') return 'high';
   if (apiMode === 'google') return 'medium';
   return DEFAULT_CONFIG_BASE.reasoningEffort;
 }
@@ -772,6 +817,42 @@ function applyReasoningEffortOptions(apiMode, preferredValue) {
   );
   select.value = values.includes(currentValue) ? currentValue : getDefaultReasoningEffortForApiMode(apiMode);
   syncCustomSelect(select);
+}
+
+function createHelpTooltip(text) {
+  const tooltip = document.createElement('span');
+  tooltip.className = 'help-tooltip';
+  tooltip.setAttribute('tabindex', '0');
+  tooltip.setAttribute('aria-label', text);
+
+  const icon = document.createElement('span');
+  icon.className = 'help-tooltip-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '?';
+
+  const bubble = document.createElement('span');
+  bubble.className = 'help-tooltip-bubble';
+  bubble.setAttribute('role', 'tooltip');
+  bubble.textContent = text;
+
+  tooltip.append(icon, bubble);
+  return tooltip;
+}
+
+function setLabelText(fieldId, text) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  const label = field.closest('.field')?.querySelector('.label');
+  if (!label) return;
+  label.textContent = text;
+}
+
+function setLabelTooltip(fieldId, text, tooltipText) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  const label = field.closest('.field')?.querySelector('.label');
+  if (!label) return;
+  label.replaceChildren(document.createTextNode(text), createHelpTooltip(tooltipText));
 }
 
 function applyI18n() {
@@ -804,11 +885,7 @@ function applyI18n() {
   toggleButton.textContent = isApiKeyVisible ? text.buttons.hide : text.buttons.show;
 
   for (const [fieldId, labelText] of Object.entries(text.labels)) {
-    const field = document.getElementById(fieldId);
-    if (!field) continue;
-    const wrapper = field.closest('.field');
-    const label = wrapper?.querySelector('.label');
-    if (label) label.textContent = labelText;
+    setLabelText(fieldId, labelText);
   }
 
   for (const [fieldId, switchText] of Object.entries(text.switchTexts)) {
@@ -818,6 +895,13 @@ function applyI18n() {
     const switchLabel = wrapper?.querySelector('.switch-text');
     if (switchLabel) switchLabel.textContent = switchText;
   }
+
+  for (const [fieldId, tooltip] of Object.entries(text.tooltips || {})) {
+    if (fieldId === 'reasoningEffort' || fieldId === 'qwenApiEndpoint') continue;
+    setLabelTooltip(fieldId, text.labels[fieldId], tooltip);
+  }
+
+  document.getElementById('apiBaseUrl').placeholder = text.placeholders.apiBaseUrl;
 
   applySelectOptionTexts('uiTheme', text.options.uiTheme);
   applySelectOptionTexts('apiMode', text.options.apiMode);
@@ -894,12 +978,25 @@ function applyTheme(themeMode) {
 
 function applyApiModeVisibility(apiMode) {
   applyReasoningEffortOptions(apiMode);
+  const text = getTextBundle();
   const isChatCompletions = apiMode === 'chat_completions';
   const isOpenAiCompatible = apiMode === 'openai_compatible';
   const isDeepSeek = apiMode === 'deepseek';
+  const isQwen = apiMode === 'qwen';
   const isGoogle = apiMode === 'google';
   const isDeepSeekThinkingOff =
     isDeepSeek && document.getElementById('deepSeekThinkingEnabled')?.checked === false;
+  const isQwenThinkingOff =
+    isQwen && document.getElementById('qwenThinkingEnabled')?.checked === false;
+  const apiBaseUrl = document.getElementById('apiBaseUrl');
+  if (apiBaseUrl) {
+    apiBaseUrl.placeholder = isQwen ? text.placeholders.qwenApiEndpoint : text.placeholders.apiBaseUrl;
+  }
+  if (isQwen) {
+    setLabelTooltip('apiBaseUrl', text.labels.apiBaseUrl, text.tooltips.qwenApiEndpoint);
+  } else {
+    setLabelText('apiBaseUrl', text.labels.apiBaseUrl);
+  }
   if (isOpenAiCompatible) {
     const outputFormat = document.getElementById('outputFormat');
     if (outputFormat) {
@@ -910,17 +1007,32 @@ function applyApiModeVisibility(apiMode) {
 
   const reasoningEffortFields = document.querySelectorAll('[data-reasoning-effort-field="true"]');
   for (const field of reasoningEffortFields) {
-    field.hidden = isDeepSeekThinkingOff;
+    field.hidden = isDeepSeekThinkingOff || isQwenThinkingOff;
+    if (isQwen) {
+      setLabelTooltip('reasoningEffort', text.labels.reasoningEffort, text.tooltips.reasoningEffort);
+    } else {
+      setLabelText('reasoningEffort', text.labels.reasoningEffort);
+    }
   }
 
   const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
   for (const field of responsesOnlyFields) {
-    field.hidden = isChatCompletions || isOpenAiCompatible || isDeepSeek || isGoogle;
+    field.hidden = isChatCompletions || isOpenAiCompatible || isDeepSeek || isQwen || isGoogle;
   }
 
   const googleOnlyFields = document.querySelectorAll('[data-google-only="true"]');
   for (const field of googleOnlyFields) {
     field.hidden = !isGoogle;
+  }
+
+  const qwenOnlyFields = document.querySelectorAll('[data-qwen-only="true"]');
+  for (const field of qwenOnlyFields) {
+    field.hidden = !isQwen;
+  }
+
+  const qwenThinkingOnlyFields = document.querySelectorAll('[data-qwen-thinking-only="true"]');
+  for (const field of qwenThinkingOnlyFields) {
+    field.hidden = !isQwen || isQwenThinkingOff;
   }
 
   const deepSeekOnlyFields = document.querySelectorAll('[data-deepseek-only="true"]');
@@ -930,18 +1042,20 @@ function applyApiModeVisibility(apiMode) {
 
   const noPromptCacheFields = document.querySelectorAll('[data-no-prompt-cache="true"]');
   for (const field of noPromptCacheFields) {
-    field.hidden = isGoogle || isDeepSeek || isOpenAiCompatible;
+    field.hidden = isGoogle || isDeepSeek || isQwen || isOpenAiCompatible;
   }
 
   const deepSeekHiddenFields = document.querySelectorAll('[data-deepseek-hidden="true"]');
   for (const field of deepSeekHiddenFields) {
-    field.hidden = isDeepSeek || isOpenAiCompatible;
+    field.hidden = isDeepSeek || isQwen || isOpenAiCompatible;
   }
 
   const openAiCompatibleHiddenFields = document.querySelectorAll('[data-openai-compatible-hidden="true"]');
   for (const field of openAiCompatibleHiddenFields) {
     field.hidden = isOpenAiCompatible;
   }
+
+  updateApiEndpointPreview();
 }
 
 function showStatus(text, isError) {
@@ -1028,7 +1142,10 @@ function updateApiEndpointPreview() {
   preview.classList.remove('invalid');
 
   if (!apiBaseUrl) {
-    preview.textContent = getTextBundle().status.apiEndpointPreviewEmpty;
+    preview.textContent =
+      apiMode === 'qwen'
+        ? getTextBundle().status.qwenEndpointPreviewEmpty
+        : getTextBundle().status.apiEndpointPreviewEmpty;
     return;
   }
 
@@ -1196,6 +1313,9 @@ function buildConnectionTestEndpoint(apiBaseUrl, model, apiMode) {
   if (apiMode === 'google') {
     return `${baseUrl}/${formatGoogleModelPath(model)}:generateContent`;
   }
+  if (apiMode === 'qwen') {
+    return baseUrl;
+  }
   const endpointPath =
     apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek'
       ? 'chat/completions'
@@ -1220,6 +1340,41 @@ function buildConnectionTestRequestBody(model, apiMode, config) {
       generationConfig: {
         maxOutputTokens: 16
       }
+    };
+  }
+
+  if (apiMode === 'qwen') {
+    const parameters = {
+      result_format: 'message',
+      response_format: {
+        type: 'text'
+      },
+      max_completion_tokens: 16,
+      enable_thinking: config?.qwenThinkingEnabled === true
+    };
+    if (config?.qwenThinkingEnabled === true) {
+      const thinkingBudget = Number.isFinite(config?.qwenThinkingBudget)
+        ? Math.max(1, Math.floor(config.qwenThinkingBudget))
+        : DEFAULT_CONFIG_BASE.qwenThinkingBudget;
+      const reasoningEffort = String(config?.reasoningEffort || '').trim().toLowerCase();
+      parameters.thinking_budget = thinkingBudget;
+      parameters.reasoning_effort = reasoningEffort === 'max' ? 'max' : 'high';
+      parameters.max_completion_tokens = thinkingBudget + 16;
+    }
+    if (Number.isFinite(config?.temperature)) {
+      parameters.temperature = config.temperature;
+    }
+    return {
+      model,
+      input: {
+        messages: [
+          {
+            role: 'user',
+            content: 'ping'
+          }
+        ]
+      },
+      parameters
     };
   }
 
@@ -1297,6 +1452,16 @@ function validateConnectionTestResponse(json, apiMode) {
   let isValid = false;
   if (apiMode === 'google') {
     isValid = Array.isArray(json.candidates);
+  } else if (apiMode === 'qwen') {
+    isValid =
+      Array.isArray(json?.output?.choices) &&
+      json.output.choices.some((choice) => {
+        const message = choice?.message;
+        return message && typeof message === 'object' && Object.prototype.hasOwnProperty.call(message, 'content');
+      });
+    if (!isValid) {
+      isValid = typeof json?.output?.text === 'string';
+    }
   } else if (apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek') {
     isValid =
       Array.isArray(json.choices) &&
@@ -1597,7 +1762,7 @@ function bindUI() {
       }
     });
   }
-  for (const fieldId of ['reasoningEffort', 'deepSeekThinkingEnabled']) {
+  for (const fieldId of ['reasoningEffort', 'deepSeekThinkingEnabled', 'qwenThinkingEnabled']) {
     document.getElementById(fieldId).addEventListener('change', () => {
       applyApiModeVisibility(document.getElementById('apiMode').value);
       setConnectionTestState('idle');

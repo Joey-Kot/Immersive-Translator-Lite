@@ -8,12 +8,20 @@
   const DEFAULT_REASONING_SUMMARY = 'auto';
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
   const DEFAULT_STRUCTURED_OUTPUT_AUTO_FALLBACK = true;
+  const DEFAULT_QWEN_THINKING_BUDGET = 100;
+  const QWEN_JSON_OUTPUT_INSTRUCTIONS = [
+    '## Qwen JSON Output Format',
+    'Return only a valid JSON object using this exact shape:',
+    '{"segments":[{"id":"<segment id>","text":"<translated text>"}]}',
+    'The JSON object must include every requested segment exactly once and preserve each segment id.'
+  ].join('\n');
   const GOOGLE_SYSTEM_CACHE_STORAGE_PREFIX = 'lit_google_system_cache_v1_';
   const API_MODES = window.LocalBlockTranslatorSharedConfig?.API_MODES || [
     'responses',
     'chat_completions',
     'openai_compatible',
     'deepseek',
+    'qwen',
     'google'
   ];
   const MESSAGE_TYPES = {
@@ -111,6 +119,16 @@
         };
 
         return requestBody;
+      }
+
+      if (apiMode === 'qwen') {
+        return {
+          model: CONFIG.model,
+          input: {
+            messages: buildQwenMessages(prompt, instructions, outputFormat)
+          },
+          parameters: buildQwenParameters(outputFormat, reasoningEffort)
+        };
       }
 
       const requestBody = {
@@ -231,6 +249,56 @@
         content: extractChatCompletionsUserContent(prompt)
       });
       return messages;
+    }
+
+    function buildQwenMessages(prompt, instructions, outputFormat) {
+      const messages = [];
+      const instructionText = buildQwenSystemInstructions(instructions, outputFormat);
+      if (instructionText) {
+        messages.push({
+          role: 'system',
+          content: instructionText
+        });
+      }
+      messages.push({
+        role: 'user',
+        content: extractChatCompletionsUserContent(prompt)
+      });
+      return messages;
+    }
+
+    function buildQwenSystemInstructions(instructions, outputFormat) {
+      const instructionText = String(instructions || '').trim();
+      if (outputFormat !== 'json_schema') {
+        return instructionText;
+      }
+      return [instructionText, QWEN_JSON_OUTPUT_INSTRUCTIONS].filter(Boolean).join('\n\n');
+    }
+
+    function buildQwenParameters(outputFormat, reasoningEffort) {
+      const parameters = {
+        result_format: 'message',
+        response_format: {
+          type: outputFormat === 'json_schema' ? 'json_object' : 'text'
+        },
+        temperature: CONFIG.temperature,
+        max_completion_tokens: CONFIG.maxOutputTokens,
+        enable_thinking: CONFIG.qwenThinkingEnabled === true
+      };
+
+      if (CONFIG.qwenThinkingEnabled === true) {
+        const thinkingBudget = Number.isFinite(CONFIG.qwenThinkingBudget)
+          ? Math.max(1, Math.floor(CONFIG.qwenThinkingBudget))
+          : DEFAULT_QWEN_THINKING_BUDGET;
+        parameters.thinking_budget = thinkingBudget;
+        parameters.reasoning_effort = buildQwenReasoningEffort(reasoningEffort);
+      }
+
+      return parameters;
+    }
+
+    function buildQwenReasoningEffort(reasoningEffort) {
+      return String(reasoningEffort || '').trim().toLowerCase() === 'max' ? 'max' : 'high';
     }
 
     function buildDeepSeekThinking(reasoningEffort) {
@@ -568,11 +636,18 @@
       if (apiMode === 'google') {
         return buildGoogleGenerateContentEndpoint();
       }
+      if (apiMode === 'qwen') {
+        return buildQwenEndpoint();
+      }
       const endpointPath =
         apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek'
           ? 'chat/completions'
           : 'responses';
       return `${CONFIG.apiBaseUrl.replace(/\/$/, '')}/${endpointPath}`;
+    }
+
+    function buildQwenEndpoint() {
+      return CONFIG.apiBaseUrl.trim();
     }
 
     async function postTranslationRequest(endpoint, signal, requestBody, options) {
@@ -727,12 +802,13 @@
     function hasStructuredOutputConfig(requestBody) {
       return Boolean(
         requestBody &&
-        (
-          (requestBody.text && requestBody.text.format) ||
-          requestBody.response_format ||
-          requestBody.generationConfig?.responseSchema ||
-          requestBody.generationConfig?.responseJsonSchema
-        )
+          (
+            (requestBody.text && requestBody.text.format) ||
+            requestBody.response_format ||
+            requestBody.parameters?.response_format?.type === 'json_object' ||
+            requestBody.generationConfig?.responseSchema ||
+            requestBody.generationConfig?.responseJsonSchema
+          )
       );
     }
 
@@ -761,6 +837,12 @@
       const fallbackBody = { ...requestBody };
       delete fallbackBody.text;
       delete fallbackBody.response_format;
+      if (fallbackBody.parameters) {
+        fallbackBody.parameters = { ...fallbackBody.parameters };
+        fallbackBody.parameters.response_format = {
+          type: 'text'
+        };
+      }
       if (fallbackBody.generationConfig) {
         fallbackBody.generationConfig = { ...fallbackBody.generationConfig };
         delete fallbackBody.generationConfig.responseMimeType;
@@ -823,6 +905,7 @@
       if (apiMode === 'chat_completions') return 'OpenAI Completions API';
       if (apiMode === 'openai_compatible') return 'OpenAI-Compatible API';
       if (apiMode === 'deepseek') return 'DeepSeek API';
+      if (apiMode === 'qwen') return 'Qwen API';
       if (apiMode === 'google') return 'Google API';
       return 'OpenAI Responses API';
     }
@@ -830,6 +913,9 @@
     function extractTranslationOutputText(json, apiMode) {
       if (apiMode === 'chat_completions' || apiMode === 'openai_compatible' || apiMode === 'deepseek') {
         return extractChatCompletionsOutputText(json);
+      }
+      if (apiMode === 'qwen') {
+        return extractQwenOutputText(json);
       }
       if (apiMode === 'google') {
         return extractGoogleOutputText(json);
@@ -857,6 +943,31 @@
         }
       }
       return chunks.join('\n').trim();
+    }
+
+    function extractQwenOutputText(json) {
+      const choices = Array.isArray(json?.output?.choices) ? json.output.choices : [];
+      for (const choice of choices) {
+        const content = choice?.message?.content;
+        if (typeof content === 'string' && content.trim()) {
+          return content.trim();
+        }
+        if (!Array.isArray(content)) continue;
+        const chunks = [];
+        for (const item of content) {
+          if (typeof item === 'string') {
+            chunks.push(item);
+          } else if (typeof item?.text === 'string') {
+            chunks.push(item.text);
+          }
+        }
+        const text = chunks.join('\n').trim();
+        if (text) return text;
+      }
+      if (typeof json?.output?.text === 'string') {
+        return json.output.text.trim();
+      }
+      return '';
     }
 
     function extractGoogleOutputText(json) {

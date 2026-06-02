@@ -31,6 +31,10 @@
   --toast-error-border: #ffc6c6;
   --toast-error-text: #c93939;
   --toast-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+  --tooltip-bg: #fbfcff;
+  --tooltip-border: rgba(178, 187, 204, 0.86);
+  --tooltip-text: #2f3542;
+  --tooltip-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
 }
 
 :root[data-theme='dark'] {
@@ -72,6 +76,10 @@
   --toast-error-border: rgba(255, 102, 126, 0.38);
   --toast-error-text: #ff9aaa;
   --toast-shadow: 0 22px 46px rgba(0, 0, 0, 0.38);
+  --tooltip-bg: #0a172b;
+  --tooltip-border: rgba(90, 146, 236, 0.42);
+  --tooltip-text: #eef5ff;
+  --tooltip-shadow: 0 18px 38px rgba(0, 0, 0, 0.42);
 }
 
 * {
@@ -211,8 +219,88 @@ label.field[hidden] {
 }
 
 .label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
   font-size: 15px;
   color: var(--muted);
+}
+
+.help-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-top: -3px;
+  color: color-mix(in oklab, var(--muted), var(--accent) 30%);
+  cursor: help;
+  transform: translateY(-0.2em);
+  z-index: 12;
+}
+
+.help-tooltip-icon {
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  background: color-mix(in oklab, var(--input-bg), transparent 28%);
+}
+
+.help-tooltip-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  width: max-content;
+  max-width: min(300px, calc(100vw - 48px));
+  padding: 9px 11px;
+  border: 1px solid var(--tooltip-border);
+  border-radius: 10px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  box-shadow: var(--tooltip-shadow);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.help-tooltip-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid var(--tooltip-border);
+  border-bottom: 1px solid var(--tooltip-border);
+  background: var(--tooltip-bg);
+  transform: translate(-50%, -5px) rotate(45deg);
+}
+
+.help-tooltip:hover .help-tooltip-bubble,
+.help-tooltip:focus-visible .help-tooltip-bubble {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.help-tooltip:focus-visible {
+  outline: none;
+  color: var(--accent);
 }
 
 .endpoint-preview-label {

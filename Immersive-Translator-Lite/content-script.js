@@ -768,6 +768,8 @@
       responseInstructions: CONFIG.responseInstructions || '',
       reasoningEffort: CONFIG.reasoningEffort || '',
       deepSeekThinkingEnabled: CONFIG.deepSeekThinkingEnabled !== false,
+      qwenThinkingEnabled: CONFIG.qwenThinkingEnabled === true,
+      qwenThinkingBudget: CONFIG.qwenThinkingBudget,
       placeholderRules: opts.placeholderRules === true
     });
     const [segmentsHash, contextHash] = await Promise.all([sha256Hex(segmentsText), sha256Hex(contextText)]);
