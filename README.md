@@ -145,6 +145,10 @@ Chrome 插件版还可以在设置页选择 `API Provider`，当前支持：
 - Qwen 模式下的 `Reasoning Effort` 会发送为 DashScope `reasoning_effort`，该参数用于控制 DeepSeek-V4 系列推理力度。
 - Qwen 的结构化输出不支持 JSON Schema；当 `Output Format` 选择结构化 JSON 时，插件会使用 `response_format: { "type": "json_object" }`，并在系统提示词末尾追加 JSON 输出格式要求。
 
+## 5. 许可证
+
+本项目采用 GNU General Public License v3.0 或更高版本（GPL-3.0-or-later）发布。详见 [LICENSE](LICENSE)。
+
 ## 6. 故障排查
 
 ### 6.1 按快捷键没反应
