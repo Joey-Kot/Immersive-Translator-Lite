@@ -2,6 +2,8 @@
 // @name         Immersive Translator Lite
 // @description  Immersive Translator Lite plugin, using the OpenAI Responses API.
 // @author       Joey
+// @copyright    2026 Joey Kot <joey.kot.x@gmail.com>
+// @license      GPL-3.0-or-later
 // @version      2026-03-23
 // @match        *://*/*
 // @run-at       document-start
@@ -9,6 +11,17 @@
 // @connect      *
 // @icon         data:image/svg+xml;charset=utf-8;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiB2aWV3Qm94PSIwIDAgMjU2IDI1NiI+CiAgPHRleHQKICAgIHg9IjEyOCIKICAgIHk9IjEyOCIKICAgIHRleHQtYW5jaG9yPSJtaWRkbGUiCiAgICBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIKICAgIGZvbnQtc2l6ZT0iMjAwIgogICAgZm9udC1mYW1pbHk9IkFyaWFsLCBIZWx2ZXRpY2EsIHNhbnMtc2VyaWYiCiAgICBmb250LXdlaWdodD0iNDAwIgogICAgZmlsbD0iIzAwMDAwMCI+UzwvdGV4dD4KPC9zdmc+
 // ==/UserScript==
+
+// Copyright (C) 2026 Joey Kot <joey.kot.x@gmail.com>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed WITHOUT ANY WARRANTY; without even the
+// implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See <https://www.gnu.org/licenses/> for more details.
 
 (function () {
   'use strict';
