@@ -382,6 +382,16 @@
       }
     }
 
+    function removeLauncherButton() {
+      if (!launcherButton) return;
+      releaseLauncherPointerCapture(launcherDragPointerId);
+      launcherButton.remove();
+      launcherButton = null;
+      launcherInteractionState = 'idle';
+      launcherFocused = false;
+      resetLauncherDragState();
+    }
+
     function isLauncherTarget(target) {
       if (!launcherButton) return false;
       if (!(target instanceof Node)) return false;
@@ -395,6 +405,7 @@
       isLauncherTarget,
       mountOverlay,
       notify,
+      removeLauncherButton,
       removeOverlay,
       updateOverlay
     };

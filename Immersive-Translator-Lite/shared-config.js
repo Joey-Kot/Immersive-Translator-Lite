@@ -142,7 +142,8 @@
     requestTimeoutSeconds: 60,
     temperature: 0,
     maxOutputTokens: 128000,
-    injectIntoIframes: true
+    injectIntoIframes: true,
+    skipRules: ''
   };
 
   const FIELD_TYPES = {
@@ -189,7 +190,8 @@
     requestTimeoutSeconds: 'number',
     temperature: 'number',
     maxOutputTokens: 'number',
-    injectIntoIframes: 'boolean'
+    injectIntoIframes: 'boolean',
+    skipRules: 'string'
   };
 
   const CONSTANTS = {

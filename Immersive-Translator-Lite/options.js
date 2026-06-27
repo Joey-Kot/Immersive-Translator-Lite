@@ -141,7 +141,8 @@ const I18N_TEXT = {
       debugReorder: '重排调试日志',
       debugRequestLog: 'Request Log',
       debugResponseLog: 'Response Log',
-      responseInstructions: '额外系统指令'
+      responseInstructions: '额外系统指令',
+      skipRules: 'Skip Rules'
     },
     switchTexts: {
       enabled: '启用翻译插件',
@@ -172,6 +173,8 @@ const I18N_TEXT = {
     },
     placeholders: {
       apiBaseUrl: 'https://api.example.com/v1',
+      skipRules:
+        '每行一个域名，命中的页面会跳过注入。\n支持行尾逗号，只会提取域名。\n\n示例：\nexample.com\nhttps://docs.example.com/path,\n*.example.org',
       qwenApiEndpoint:
         'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
     },
@@ -332,7 +335,8 @@ const I18N_TEXT = {
       debugReorder: 'Reorder Debug Log',
       debugRequestLog: 'Request Log',
       debugResponseLog: 'Response Log',
-      responseInstructions: 'System Instructions'
+      responseInstructions: 'System Instructions',
+      skipRules: 'Skip Rules'
     },
     switchTexts: {
       enabled: 'Enable translator extension',
@@ -363,6 +367,8 @@ const I18N_TEXT = {
     },
     placeholders: {
       apiBaseUrl: 'https://api.example.com/v1',
+      skipRules:
+        'One domain per line. Matching pages skip injection.\nTrailing commas are allowed; only the domain is extracted.\n\nExamples:\nexample.com\nhttps://docs.example.com/path,\n*.example.org',
       qwenApiEndpoint:
         'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
     },
@@ -913,6 +919,7 @@ function applyI18n() {
   }
 
   document.getElementById('apiBaseUrl').placeholder = text.placeholders.apiBaseUrl;
+  document.getElementById('skipRules').placeholder = text.placeholders.skipRules;
 
   applySelectOptionTexts('uiTheme', text.options.uiTheme);
   applySelectOptionTexts('apiMode', text.options.apiMode);

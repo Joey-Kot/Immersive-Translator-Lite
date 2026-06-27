@@ -82,6 +82,8 @@
   let touchstartHandler = null;
   /** @type {(event: TouchEvent) => void | null} */
   let touchendHandler = null;
+  /** @type {boolean} */
+  let bootstrapCompleted = false;
   /** @type {{ time: number, x: number, y: number, target: EventTarget|null }|null} */
   let lastTapMeta = null;
 
@@ -127,6 +129,16 @@
     if (!CONFIG.injectIntoIframes && !IS_TOP_FRAME && runtimeStatus === 'selecting') {
       exitSelectionMode();
     }
+    if (isCurrentDomainSkipped()) {
+      if (runtimeStatus === 'selecting') {
+        exitSelectionMode();
+      }
+      uiClient.removeLauncherButton();
+      return;
+    }
+    if (bootstrapCompleted) {
+      initRuntimeFeatures();
+    }
   }
 
   async function loadSettingsFromStorage() {
@@ -137,7 +149,53 @@
   function isRuntimeActiveForCurrentFrame() {
     if (!RUNTIME_SETTINGS.enabled) return false;
     if (!CONFIG.injectIntoIframes && !IS_TOP_FRAME) return false;
+    if (isCurrentDomainSkipped()) return false;
     return true;
+  }
+
+  function normalizeSkipRuleHostname(rule) {
+    let value = String(rule || '').trim().replace(/,+$/g, '').trim();
+    if (!value) return '';
+    value = value.replace(/^\*\./, '');
+
+    const urlCandidate = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+    try {
+      return normalizeHostname(new URL(urlCandidate).hostname);
+    } catch (_) {
+      const match = value.match(/^(?:[a-z][a-z\d+.-]*:\/\/)?(?:[^@\s/]+@)?(\[[^\]]+\]|[^:/?#,\s]+)/i);
+      return normalizeHostname(match?.[1] || '');
+    }
+  }
+
+  function normalizeHostname(hostname) {
+    return String(hostname || '')
+      .trim()
+      .replace(/^\[/, '')
+      .replace(/\]$/, '')
+      .replace(/\.$/, '')
+      .toLowerCase();
+  }
+
+  function parseSkipRuleHostnames(skipRules) {
+    const hostnames = new Set();
+    for (const line of String(skipRules || '').split(/\r?\n/)) {
+      const hostname = normalizeSkipRuleHostname(line);
+      if (hostname) hostnames.add(hostname);
+    }
+    return hostnames;
+  }
+
+  function hostnameMatchesRule(hostname, ruleHostname) {
+    return hostname === ruleHostname || hostname.endsWith(`.${ruleHostname}`);
+  }
+
+  function isCurrentDomainSkipped() {
+    const currentHostname = normalizeHostname(location.hostname);
+    if (!currentHostname) return false;
+    for (const ruleHostname of parseSkipRuleHostnames(CONFIG.skipRules)) {
+      if (hostnameMatchesRule(currentHostname, ruleHostname)) return true;
+    }
+    return false;
   }
 
   function logInfoIf(enabled, ...args) {
@@ -187,6 +245,7 @@
       if (isEditableTarget(event.target)) return;
 
       if (matchesHotkey(event, hotkeySpec)) {
+        if (!isRuntimeActiveForCurrentFrame()) return;
         event.__lbtHotkeyHandled = true;
         event.preventDefault();
         toggleSelectionMode();
@@ -347,6 +406,7 @@
 
       const target = event.target;
       if (!CONFIG.enableTouchShortcuts) return;
+      if (!isRuntimeActiveForCurrentFrame()) return;
       if (isEditableTarget(target)) return;
 
       event.preventDefault();
@@ -1634,6 +1694,13 @@
     });
   }
 
+  function initRuntimeFeatures() {
+    if (isCurrentDomainSkipped()) return;
+    initHotkeys();
+    initTouchShortcuts();
+    uiClient.initLauncherButton();
+  }
+
   async function bootstrap() {
     await loadSettingsFromStorage();
     registerExtensionListeners();
@@ -1644,9 +1711,8 @@
       `[LocalBlockTranslator] bootstrap version=${SCRIPT_VERSION} build=${buildId} topFrame=${IS_TOP_FRAME} time=${new Date().toISOString()}`
     );
 
-    initHotkeys();
-    initTouchShortcuts();
-    uiClient.initLauncherButton();
+    bootstrapCompleted = true;
+    initRuntimeFeatures();
     notifyFrameReady();
   }
 
