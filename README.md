@@ -147,7 +147,7 @@ Chrome 插件版还可以在设置页选择 `API Provider`，当前支持：
 
 ## 5. 许可证
 
-本项目采用 GNU General Public License v3.0 或更高版本（GPL-3.0-or-later）发布。详见 [LICENSE](LICENSE)。
+本项目采用 GNU General Public License v3.0 或更高版本（GPL-3.0-or-later）发布。详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
 
 ## 6. 故障排查
 
