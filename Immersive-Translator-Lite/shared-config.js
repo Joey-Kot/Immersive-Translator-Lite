@@ -17,7 +17,7 @@
   const DEFAULT_PROMPT_CACHE_KEY = '188f6fd3-49ea-4f63-ae50-b87cf9574a1a';
   const DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER = '111acfce-6ac6-4373-bdcb-61455403f3af';
 
-  const DEFAULT_RESPONSE_INSTRUCTIONS = [
+  const BASE_RESPONSE_INSTRUCTIONS = [
     '## Core Requirements',
     '- The translation must be faithful to the original meaning, intent, tone, style, and level of formality.',
     '- The output should read naturally and idiomatically in Target Language, avoiding stiff or overly literal phrasing.',
@@ -98,11 +98,28 @@
     '- Do not add titles, prefaces, explanations, notes, or quotation marks unless they are present in the source text.'
   ].join('\n');
 
+  const RESPONSE_INSTRUCTIONS_CACHE_STABILITY_EXTENSION = [
+    '## Context, Grammar, and Cross-Segment Coherence',
+    '- Interpret each segment in light of the surrounding segments when they clearly belong to the same passage, interface, dialogue, list, or document section.',
+    '- Preserve references between sentences and segments, including pronouns, demonstratives, ellipsis, repeated terminology, and cause-and-effect relationships.',
+    '- Maintain the source tense, aspect, modality, negation, conditions, comparisons, and degree of certainty unless the target language requires a different grammatical form.',
+    '- Preserve logical connectors and discourse relationships such as contrast, continuation, concession, consequence, sequence, examples, and conclusions.',
+    '- Prefer natural target-language word order and collocation while retaining every meaningful restriction, qualifier, exception, and scope relationship in the source.',
+    '- Keep headlines, captions, labels, fragments, notifications, and dialogue lines in the same functional style instead of expanding them into explanatory prose.',
+    '- Do not silently correct factual claims, technical values, names, quotations, or apparent contradictions in the source; translate them faithfully as written.',
+    '- When several segments form one coherent thought, make their translations read consistently together without merging segments or moving content between ids.'
+  ].join('\n');
+
+  const DEFAULT_RESPONSE_INSTRUCTIONS = [
+    BASE_RESPONSE_INSTRUCTIONS,
+    RESPONSE_INSTRUCTIONS_CACHE_STABILITY_EXTENSION
+  ].join('\n\n');
+
   const DEFAULT_TRANSLATION_CONFIG = {
     apiMode: 'responses',
     apiBaseUrl: 'https://api.example.com/v1',
     apiKey: 'sk-xxx',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     sourceLang: 'Any Language',
     targetLang: 'Chinese Simplified',
     responseInstructions: DEFAULT_RESPONSE_INSTRUCTIONS,
@@ -203,7 +220,8 @@
     DEFAULT_REQUEST_CACHE_TIMEOUT_HOURS: DEFAULT_TRANSLATION_CONFIG.requestCacheTimeoutHours,
     RETRY_BASE_DELAY_MS: 500,
     RETRY_MAX_DELAY_MS: 5000,
-    REQUEST_CACHE_STORAGE_PREFIX: 'lit_request_cache_v1_'
+    REQUEST_CACHE_STORAGE_PREFIX: 'lit_request_cache_v1_',
+    RESPONSE_INSTRUCTIONS_STORAGE_KEY: 'lit_response_instructions_v1'
   };
 
   function createDefaultTranslationConfig(options) {

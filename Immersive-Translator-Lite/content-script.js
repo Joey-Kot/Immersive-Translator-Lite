@@ -1676,8 +1676,13 @@
 
     if (chrome.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName !== 'sync' || !changes.settings) return;
-        applySettingsPayload(changes.settings.newValue);
+        const syncSettingsChanged = areaName === 'sync' && Boolean(changes.settings);
+        const localInstructionsChanged =
+          areaName === 'local' && Boolean(changes[CONFIG_CONSTANTS.RESPONSE_INSTRUCTIONS_STORAGE_KEY]);
+        if (!syncSettingsChanged && !localInstructionsChanged) return;
+        loadSettingsFromStorage().catch((error) => {
+          console.error('[LocalBlockTranslator] reload settings failed:', error);
+        });
       });
     }
   }

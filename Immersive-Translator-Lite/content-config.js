@@ -97,13 +97,37 @@
     }
 
     async function loadSettingsFromStorage() {
-      if (!chrome?.storage?.sync) {
-        return applySettingsPayload(buildDefaultSettingsPayload());
-      }
-
       const defaultSettings = buildDefaultSettingsPayload();
-      const stored = await chrome.storage.sync.get({ settings: defaultSettings });
-      return applySettingsPayload(stored.settings || defaultSettings);
+      const syncPromise = chrome?.storage?.sync
+        ? chrome.storage.sync.get({ settings: defaultSettings })
+        : Promise.resolve({ settings: defaultSettings });
+      const localPromise = chrome?.storage?.local
+        ? chrome.storage.local.get(CONSTANTS.RESPONSE_INSTRUCTIONS_STORAGE_KEY)
+        : Promise.resolve({});
+      const [syncStored, localStored] = await Promise.all([syncPromise, localPromise]);
+      const storedSettings = syncStored.settings || defaultSettings;
+      const storedTranslationConfig =
+        storedSettings.translationConfig && typeof storedSettings.translationConfig === 'object'
+          ? storedSettings.translationConfig
+          : {};
+      const hasLocalInstructions = Object.prototype.hasOwnProperty.call(
+        localStored,
+        CONSTANTS.RESPONSE_INSTRUCTIONS_STORAGE_KEY
+      );
+      const responseInstructions = hasLocalInstructions
+        ? localStored[CONSTANTS.RESPONSE_INSTRUCTIONS_STORAGE_KEY]
+        : storedTranslationConfig.responseInstructions;
+      const mergedSettings = {
+        ...storedSettings,
+        translationConfig: {
+          ...storedTranslationConfig,
+          responseInstructions:
+            typeof responseInstructions === 'string'
+              ? responseInstructions
+              : defaultSettings.translationConfig.responseInstructions
+        }
+      };
+      return applySettingsPayload(mergedSettings);
     }
 
     return {

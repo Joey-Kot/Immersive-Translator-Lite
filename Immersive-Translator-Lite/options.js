@@ -22,6 +22,7 @@ const MESSAGE_TYPES = {
   API_REQUEST: 'API_REQUEST'
 };
 const REQUEST_CACHE_STORAGE_PREFIX = SHARED_CONFIG.CONSTANTS.REQUEST_CACHE_STORAGE_PREFIX;
+const RESPONSE_INSTRUCTIONS_STORAGE_KEY = SHARED_CONFIG.CONSTANTS.RESPONSE_INSTRUCTIONS_STORAGE_KEY;
 
 function getDefaultConfig() {
   return SHARED_CONFIG.createDefaultTranslationConfig({ generateUuid });
@@ -36,7 +37,7 @@ const I18N_TEXT = {
     htmlLang: 'zh-CN',
     documentTitle: '沉浸式翻译设置',
     heading: '沉浸式翻译设置',
-    subtitle: '配置将通过 chrome.storage.sync 保存，并应用到所有 frame。',
+    subtitle: '常规配置通过 chrome.storage.sync 保存，长系统指令保存在本机，并应用到所有 frame。',
     sectionTitles: {
       system: 'System Settings',
       language: 'Language Settings',
@@ -77,7 +78,7 @@ const I18N_TEXT = {
       configImportInvalid: '配置文件不是有效的 JSON 设置。',
       configExportFailedPrefix: '导出配置失败',
       configImportFailedPrefix: '导入配置失败',
-      googleSyncDone: '当前本地配置已强制覆盖 chrome.storage.sync。',
+      googleSyncDone: '常规配置已覆盖 chrome.storage.sync，长系统指令已保存到本机。',
       googleSyncFailedPrefix: 'Google Sync 失败',
       saveFailedPrefix: '保存失败',
       cacheClearFailedPrefix: '清空缓存失败',
@@ -128,7 +129,7 @@ const I18N_TEXT = {
       qwenThinkingBudget: 'Thinking Budget',
       promptCacheKey: '提示词缓存键（普通模式）',
       promptCacheKeyPlaceholder: '提示词缓存键（占位符模式）',
-      promptCacheRetention: '缓存保留时长',
+      promptCacheRetention: 'Google 缓存保留时长',
       structuredOutputAutoFallback: '结构化输出自动降级',
       enableTouchShortcuts: '触控快捷操作',
       threeFingerCancelEnabled: '三指取消',
@@ -230,7 +231,7 @@ const I18N_TEXT = {
     htmlLang: 'en',
     documentTitle: 'Immersive Translator Lite Settings',
     heading: 'Immersive Translator Lite Settings',
-    subtitle: 'Settings are stored in chrome.storage.sync and applied to every frame.',
+    subtitle: 'Regular settings use chrome.storage.sync; long system instructions stay local and apply to every frame.',
     sectionTitles: {
       system: 'System Settings',
       language: 'Language Settings',
@@ -271,7 +272,7 @@ const I18N_TEXT = {
       configImportInvalid: 'The selected file is not valid JSON settings.',
       configExportFailedPrefix: 'Export config failed',
       configImportFailedPrefix: 'Import config failed',
-      googleSyncDone: 'Current local config has overwritten chrome.storage.sync.',
+      googleSyncDone: 'Regular settings have overwritten chrome.storage.sync; long system instructions were saved locally.',
       googleSyncFailedPrefix: 'Google Sync failed',
       saveFailedPrefix: 'Save failed',
       cacheClearFailedPrefix: 'Clear cache failed',
@@ -322,7 +323,7 @@ const I18N_TEXT = {
       qwenThinkingBudget: 'Thinking Budget',
       promptCacheKey: 'Prompt Cache Key (Normal Mode)',
       promptCacheKeyPlaceholder: 'Prompt Cache Key (Placeholder Mode)',
-      promptCacheRetention: 'Cache Retention Duration',
+      promptCacheRetention: 'Google Cache Retention',
       structuredOutputAutoFallback: 'Structured Output Auto Fallback',
       enableTouchShortcuts: 'Touch Shortcuts',
       threeFingerCancelEnabled: 'Three-Finger Cancel',
@@ -1500,8 +1501,50 @@ function validateConnectionTestResponse(json, apiMode) {
 }
 
 async function readSettings() {
-  const result = await chrome.storage.sync.get({ settings: getDefaultSettings() });
-  return normalizeSettings(result.settings);
+  const defaultSettings = getDefaultSettings();
+  const [syncStored, localStored] = await Promise.all([
+    chrome.storage.sync.get({ settings: defaultSettings }),
+    chrome.storage.local.get(RESPONSE_INSTRUCTIONS_STORAGE_KEY)
+  ]);
+  const storedSettings = syncStored.settings || defaultSettings;
+  const storedTranslationConfig = isObjectRecord(storedSettings.translationConfig)
+    ? storedSettings.translationConfig
+    : {};
+  const hasLocalInstructions = Object.prototype.hasOwnProperty.call(
+    localStored,
+    RESPONSE_INSTRUCTIONS_STORAGE_KEY
+  );
+  const responseInstructions = hasLocalInstructions
+    ? localStored[RESPONSE_INSTRUCTIONS_STORAGE_KEY]
+    : storedTranslationConfig.responseInstructions;
+  return normalizeSettings({
+    ...storedSettings,
+    translationConfig: {
+      ...storedTranslationConfig,
+      responseInstructions:
+        typeof responseInstructions === 'string'
+          ? responseInstructions
+          : defaultSettings.translationConfig.responseInstructions
+    }
+  });
+}
+
+async function persistSettings(settings) {
+  const normalized = normalizeSettings(settings);
+  const syncSettings = {
+    ...normalized,
+    translationConfig: {
+      ...normalized.translationConfig
+    }
+  };
+  const responseInstructions = syncSettings.translationConfig.responseInstructions;
+  delete syncSettings.translationConfig.responseInstructions;
+
+  await chrome.storage.local.set({
+    [RESPONSE_INSTRUCTIONS_STORAGE_KEY]: responseInstructions
+  });
+  await chrome.storage.sync.set({ settings: syncSettings });
+  return normalized;
 }
 
 function populateForm(settings) {
@@ -1590,13 +1633,13 @@ function exportConfig() {
 }
 
 async function persistImportedSettings(settings) {
-  await chrome.storage.sync.set({ settings });
-  populateForm(settings);
+  const persistedSettings = await persistSettings(settings);
+  populateForm(persistedSettings);
   setConnectionTestState('idle');
   showStatus(getTextBundle().status.configImported, false);
   await chrome.runtime.sendMessage({
     type: MESSAGE_TYPES.SETTINGS_UPDATED,
-    settings
+    settings: persistedSettings
   }).catch(() => {});
 }
 
@@ -1613,8 +1656,7 @@ async function importConfigFromFile(file) {
 }
 
 async function saveSettings() {
-  const settings = collectFormSettings();
-  await chrome.storage.sync.set({ settings });
+  const settings = await persistSettings(collectFormSettings());
   applyTheme(settings.uiTheme);
   showStatus(getTextBundle().status.saved, false);
   await chrome.runtime.sendMessage({
@@ -1624,8 +1666,7 @@ async function saveSettings() {
 }
 
 async function forceGoogleSyncSettings() {
-  const settings = collectFormSettings();
-  await chrome.storage.sync.set({ settings });
+  const settings = await persistSettings(collectFormSettings());
   applyTheme(settings.uiTheme);
   setConnectionTestState('idle');
   showStatus(getTextBundle().status.googleSyncDone, false);
@@ -1636,8 +1677,7 @@ async function forceGoogleSyncSettings() {
 }
 
 async function resetSettings() {
-  const defaults = normalizeSettings(getDefaultSettings());
-  await chrome.storage.sync.set({ settings: defaults });
+  const defaults = await persistSettings(getDefaultSettings());
   populateForm(defaults);
   isApiKeyVisible = false;
   document.getElementById('apiKey').type = 'password';

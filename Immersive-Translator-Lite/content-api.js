@@ -15,6 +15,8 @@
   const DEFAULT_PROMPT_CACHE_KEY = '188f6fd3-49ea-4f63-ae50-b87cf9574a1a';
   const DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER = 'eecc9c28-f3c4-4c1c-b8c0-7722c19faeaf';
   const DEFAULT_PROMPT_CACHE_RETENTION = '24h';
+  const OPENAI_PROMPT_CACHE_TTL = '30m';
+  const OPENAI_PROMPT_CACHE_RETENTION = '24h';
   const DEFAULT_REASONING_EFFORT = 'medium';
   const DEFAULT_REASONING_SUMMARY = 'auto';
   const DEFAULT_OUTPUT_FORMAT = 'json_schema';
@@ -58,8 +60,7 @@
       const promptCacheKeyPlaceholder =
         (CONFIG.promptCacheKeyPlaceholder || '').trim() || DEFAULT_PROMPT_CACHE_KEY_PLACEHOLDER;
       const promptCacheKey = isPlaceholderMode ? promptCacheKeyPlaceholder : promptCacheKeyNormal;
-      const promptCacheRetention =
-        (CONFIG.promptCacheRetention || '').trim() || DEFAULT_PROMPT_CACHE_RETENTION;
+      const isGpt56Plus = isGpt56OrLater(CONFIG.model);
       const reasoningEffort = (CONFIG.reasoningEffort || '').trim() || DEFAULT_REASONING_EFFORT;
       const reasoningSummary = (CONFIG.reasoningSummary || '').trim() || DEFAULT_REASONING_SUMMARY;
       const outputFormat = (CONFIG.outputFormat || '').trim() || DEFAULT_OUTPUT_FORMAT;
@@ -77,13 +78,13 @@
       if (apiMode === 'chat_completions') {
         const requestBody = {
           model: CONFIG.model,
-          messages: buildChatCompletionsMessages(prompt, instructions),
+          messages: buildChatCompletionsMessages(prompt, instructions, isGpt56Plus),
           prompt_cache_key: promptCacheKey,
-          prompt_cache_retention: promptCacheRetention,
           reasoning_effort: reasoningEffort,
           temperature: CONFIG.temperature,
           max_completion_tokens: CONFIG.maxOutputTokens
         };
+        applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus);
 
         if (outputFormat === 'json_schema') {
           requestBody.response_format = {
@@ -144,10 +145,7 @@
 
       const requestBody = {
         model: CONFIG.model,
-        instructions,
-        input: prompt,
         prompt_cache_key: promptCacheKey,
-        prompt_cache_retention: promptCacheRetention,
         reasoning: {
           effort: reasoningEffort,
           summary: reasoningSummary
@@ -155,6 +153,14 @@
         temperature: CONFIG.temperature,
         max_output_tokens: CONFIG.maxOutputTokens
       };
+
+      if (isGpt56Plus) {
+        requestBody.input = buildResponsesInputWithExplicitPromptCache(prompt, instructions);
+      } else {
+        requestBody.instructions = instructions;
+        requestBody.input = prompt;
+      }
+      applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus);
 
       if (outputFormat === 'json_schema') {
         requestBody.text = {
@@ -214,13 +220,23 @@
       }
     }
 
-    function buildChatCompletionsMessages(prompt, instructions) {
+    function buildChatCompletionsMessages(prompt, instructions, useExplicitPromptCache) {
       const messages = [];
       const instructionText = String(instructions || '').trim();
       if (instructionText) {
         messages.push({
           role: 'developer',
-          content: instructionText
+          content: useExplicitPromptCache
+            ? [
+                {
+                  type: 'text',
+                  text: instructionText,
+                  prompt_cache_breakpoint: {
+                    mode: 'explicit'
+                  }
+                }
+              ]
+            : instructionText
         });
       }
       messages.push({
@@ -228,6 +244,60 @@
         content: extractChatCompletionsUserContent(prompt)
       });
       return messages;
+    }
+
+    function buildResponsesInputWithExplicitPromptCache(prompt, instructions) {
+      const input = [];
+      const instructionText = String(instructions || '').trim();
+      if (instructionText) {
+        input.push({
+          type: 'message',
+          role: 'developer',
+          content: [
+            {
+              type: 'input_text',
+              text: instructionText,
+              prompt_cache_breakpoint: {
+                mode: 'explicit'
+              }
+            }
+          ]
+        });
+      }
+
+      input.push({
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: extractChatCompletionsUserContent(prompt)
+          }
+        ]
+      });
+
+      return input;
+    }
+
+    function applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus) {
+      if (isGpt56Plus) {
+        requestBody.prompt_cache_options = {
+          mode: 'explicit',
+          ttl: OPENAI_PROMPT_CACHE_TTL
+        };
+        return;
+      }
+
+      requestBody.prompt_cache_retention = OPENAI_PROMPT_CACHE_RETENTION;
+    }
+
+    function isGpt56OrLater(model) {
+      const match = String(model || '').trim().match(/gpt-(\d+)(?:\.(\d+))?/i);
+      if (!match) return false;
+
+      const major = Number(match[1]);
+      const minor = match[2] === undefined ? 0 : Number(match[2]);
+      return major > 5 || (major === 5 && minor >= 6);
     }
 
     function buildDeepSeekMessages(prompt, instructions) {
