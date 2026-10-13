@@ -84,6 +84,7 @@
           temperature: CONFIG.temperature,
           max_completion_tokens: CONFIG.maxOutputTokens
         };
+        applyOpenAiServiceTier(requestBody);
         applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus);
 
         if (outputFormat === 'json_schema') {
@@ -153,6 +154,7 @@
         temperature: CONFIG.temperature,
         max_output_tokens: CONFIG.maxOutputTokens
       };
+      applyOpenAiServiceTier(requestBody);
 
       if (isGpt56Plus) {
         requestBody.input = buildResponsesInputWithExplicitPromptCache(prompt, instructions);
@@ -277,6 +279,13 @@
       });
 
       return input;
+    }
+
+    function applyOpenAiServiceTier(requestBody) {
+      const serviceTier = String(CONFIG.serviceTier || '').trim().toLowerCase();
+      if (serviceTier === 'fast' || serviceTier === 'ultrafast') {
+        requestBody.service_tier = serviceTier;
+      }
     }
 
     function applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus) {

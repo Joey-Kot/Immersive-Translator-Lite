@@ -747,6 +747,23 @@
       clearSourceTaskMark(rootElement);
     }
 
+    function restoreNestedTranslations(rootElement) {
+      if (!(rootElement instanceof Element)) return 0;
+
+      const translatedDescendants = Array.from(rootElement.querySelectorAll('[data-tm-source-task]'));
+      let restoredCount = 0;
+
+      // Restore innermost translations first so every parent returns to its original DOM shape.
+      for (const sourceElement of translatedDescendants.reverse()) {
+        if (!(sourceElement instanceof Element)) continue;
+        restoreSourceIfNeeded(sourceElement);
+        removeExistingTranslatedClone(sourceElement);
+        restoredCount += 1;
+      }
+
+      return restoredCount;
+    }
+
     function findAncestorWithDatasetKey(startElement, datasetKey) {
       let current = startElement instanceof Element ? startElement : null;
       while (current) {
@@ -878,6 +895,7 @@
       registerInlineTask,
       removeExistingTranslatedClone,
       resolveFallbackTextMap,
+      restoreNestedTranslations,
       restoreSourceIfNeeded,
       shouldFallbackCloneForCustomElement,
       toggleExistingTranslationPair

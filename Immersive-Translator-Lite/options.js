@@ -121,6 +121,7 @@ const I18N_TEXT = {
       requestCacheTimeoutHours: '请求缓存超时（小时）',
       cleanRequestCache: '清空请求缓存',
       outputFormat: '输出格式',
+      serviceTier: 'Service Tier',
       reasoningEffort: '推理强度',
       reasoningSummary: 'Reasoning Summary',
       googleCacheEnabled: 'Google 缓存',
@@ -206,6 +207,11 @@ const I18N_TEXT = {
       outputFormat: {
         json_schema: '结构化 JSON（推荐）',
         none: '不限制（纯文本）'
+      },
+      serviceTier: {
+        default: 'default',
+        fast: 'fast',
+        ultrafast: 'ultra fast'
       },
       reasoningEffort: {
         none: 'none（关闭）',
@@ -315,6 +321,7 @@ const I18N_TEXT = {
       requestCacheTimeoutHours: 'Request Cache Timeout (hours)',
       cleanRequestCache: 'Clean Request Cache',
       outputFormat: 'Output Format',
+      serviceTier: 'Service Tier',
       reasoningEffort: 'Reasoning Effort',
       reasoningSummary: 'Reasoning Summary',
       googleCacheEnabled: 'Google Cache',
@@ -401,6 +408,11 @@ const I18N_TEXT = {
         json_schema: 'Structured JSON (recommended)',
         none: 'Unrestricted (plain text)'
       },
+      serviceTier: {
+        default: 'default',
+        fast: 'fast',
+        ultrafast: 'ultra fast'
+      },
       reasoningEffort: {
         none: 'none (off)',
         minimal: 'minimal',
@@ -464,6 +476,9 @@ function normalizeSettings(input) {
   }
   if (!['auto', 'concise', 'detailed'].includes(result.translationConfig.reasoningSummary)) {
     result.translationConfig.reasoningSummary = defaults.reasoningSummary;
+  }
+  if (!['default', 'fast', 'ultrafast'].includes(result.translationConfig.serviceTier)) {
+    result.translationConfig.serviceTier = defaults.serviceTier;
   }
   if (!API_MODES.includes(result.translationConfig.apiMode)) {
     result.translationConfig.apiMode = defaults.apiMode;
@@ -927,6 +942,7 @@ function applyI18n() {
   applySelectOptionTexts('selectionMode', text.options.selectionMode);
   applySelectOptionTexts('multipleSelectionModeHotkey', text.options.multipleSelectionModeHotkey);
   applySelectOptionTexts('outputFormat', text.options.outputFormat);
+  applySelectOptionTexts('serviceTier', text.options.serviceTier);
   applyReasoningEffortOptions(document.getElementById('apiMode')?.value || DEFAULT_CONFIG_BASE.apiMode);
   applySelectOptionTexts('reasoningSummary', text.options.reasoningSummary);
   applySelectOptionTexts('promptCacheRetention', text.options.promptCacheRetention);
@@ -1037,6 +1053,11 @@ function applyApiModeVisibility(apiMode) {
   const responsesOnlyFields = document.querySelectorAll('[data-responses-only="true"]');
   for (const field of responsesOnlyFields) {
     field.hidden = isChatCompletions || isOpenAiCompatible || isDeepSeek || isQwen || isGoogle;
+  }
+
+  const openAiOnlyFields = document.querySelectorAll('[data-openai-only="true"]');
+  for (const field of openAiOnlyFields) {
+    field.hidden = !['responses', 'chat_completions'].includes(apiMode);
   }
 
   const googleOnlyFields = document.querySelectorAll('[data-google-only="true"]');
@@ -1441,14 +1462,25 @@ function buildConnectionTestRequestBody(model, apiMode, config) {
         requestBody.reasoning_effort = reasoningEffort === 'max' || reasoningEffort === 'xhigh' ? 'max' : 'high';
       }
     }
+    applyOpenAiServiceTierToRequest(requestBody, apiMode, config);
     return requestBody;
   }
 
-  return {
+  const requestBody = {
     model,
     input: 'ping',
     max_output_tokens: 16
   };
+  applyOpenAiServiceTierToRequest(requestBody, apiMode, config);
+  return requestBody;
+}
+
+function applyOpenAiServiceTierToRequest(requestBody, apiMode, config) {
+  if (!['responses', 'chat_completions'].includes(apiMode)) return;
+  const serviceTier = String(config?.serviceTier || '').trim().toLowerCase();
+  if (serviceTier === 'fast' || serviceTier === 'ultrafast') {
+    requestBody.service_tier = serviceTier;
+  }
 }
 
 function buildConnectionTestHeaders(apiKey, apiMode) {

@@ -674,6 +674,7 @@
     let mergedIndex = 0;
 
     for (const item of runnableTasks) {
+      domClient.restoreNestedTranslations(item.target);
       const textSegments = domClient.extractTextSegments(item.target);
       if (!textSegments.length) {
         notify('No translatable text found in selected block.', 'warn');
@@ -1238,6 +1239,7 @@
   }
 
   async function runTranslationFlow(rootElement) {
+    domClient.restoreNestedTranslations(rootElement);
     const textSegments = domClient.extractTextSegments(rootElement);
     if (!textSegments.length) {
       notify('No translatable text found in selected block.', 'warn');
