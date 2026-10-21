@@ -68,6 +68,7 @@ Chrome 插件版是目前推荐使用的版本，主要支持：
 - 选项页支持“一键清空请求缓存”，会同步广播到各页面 frame。
 - `Prompt Cache` 支持普通模式与占位符模式分别使用不同缓存键（`promptCacheKey` / `promptCacheKeyPlaceholder`）。
 - `Prompt Cache` 生效前提：翻译规则前缀要固定且足够长；默认内置提示词已满足该条件。
+- OpenAI 可选“提示词缓存预热”：连续未命中达到设置阈值后自动预热。Responses 与 Completions 都复用完整的稳定 `developer` 前缀；下一次正常翻译以 API 返回的 `cached_tokens` 验证结果。
 
 4. **渲染分支与切换机制**
 - **普通 DOM**：构建译文克隆节点，插入源节点后方并隐藏原文。

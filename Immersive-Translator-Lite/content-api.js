@@ -47,9 +47,13 @@
     const getErrorMessage = deps.getErrorMessage;
     const notify = deps.notify;
     let googleSystemCacheUnavailable = false;
+    const openAiPromptCacheMissCounts = new Map();
+    let openAiPromptCachePrewarmPromise = null;
 
     function resetRuntimeState() {
       googleSystemCacheUnavailable = false;
+      openAiPromptCacheMissCounts.clear();
+      openAiPromptCachePrewarmPromise = null;
     }
 
     async function buildTranslationRequestBody(prompt, instructions, options) {
@@ -156,12 +160,11 @@
       };
       applyOpenAiServiceTier(requestBody);
 
-      if (isGpt56Plus) {
-        requestBody.input = buildResponsesInputWithExplicitPromptCache(prompt, instructions);
-      } else {
-        requestBody.instructions = instructions;
-        requestBody.input = prompt;
-      }
+      requestBody.input = buildResponsesInputWithDeveloperInstructions(
+        prompt,
+        instructions,
+        isGpt56Plus
+      );
       applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus);
 
       if (outputFormat === 'json_schema') {
@@ -186,22 +189,13 @@
 
       try {
         const json = await postTranslationRequest(endpoint, controller.signal, requestBody, { apiMode });
-        const content = extractTranslationOutputText(json, apiMode);
-        if (!content) {
-          throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
-        }
-
-        return content;
+        return finalizeTranslationResponse(json, apiMode, requestBody);
       } catch (error) {
         if (shouldRetryWithoutGoogleThinking(error, requestBody, apiMode)) {
           const fallbackBody = cloneWithoutGoogleThinking(requestBody);
           console.warn('[LocalBlockTranslator] Google thinkingConfig unsupported, retrying once without thinking config');
           const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody, { apiMode });
-          const content = extractTranslationOutputText(json, apiMode);
-          if (!content) {
-            throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
-          }
-          return content;
+          return finalizeTranslationResponse(json, apiMode, fallbackBody);
         }
 
         if (!shouldRetryWithoutStructuredOutput(error, requestBody)) {
@@ -212,11 +206,7 @@
         notify('Structured output unsupported by endpoint. Falling back to plain JSON mode once.', 'warn');
         console.warn('[LocalBlockTranslator] structured output unsupported, retrying once without structured output config');
         const json = await postTranslationRequest(endpoint, controller.signal, fallbackBody, { apiMode });
-        const content = extractTranslationOutputText(json, apiMode);
-        if (!content) {
-          throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
-        }
-        return content;
+        return finalizeTranslationResponse(json, apiMode, fallbackBody);
       } finally {
         clearTimeout(timer);
       }
@@ -248,36 +238,41 @@
       return messages;
     }
 
-    function buildResponsesInputWithExplicitPromptCache(prompt, instructions) {
+    function buildResponsesInputWithDeveloperInstructions(prompt, instructions, useExplicitPromptCache) {
       const input = [];
       const instructionText = String(instructions || '').trim();
       if (instructionText) {
         input.push({
           type: 'message',
           role: 'developer',
+          content: useExplicitPromptCache
+            ? [
+                {
+                  type: 'input_text',
+                  text: instructionText,
+                  prompt_cache_breakpoint: {
+                    mode: 'explicit'
+                  }
+                }
+              ]
+            : instructionText
+        });
+      }
+
+      if (Array.isArray(prompt)) {
+        input.push(...prompt);
+      } else {
+        input.push({
+          type: 'message',
+          role: 'user',
           content: [
             {
               type: 'input_text',
-              text: instructionText,
-              prompt_cache_breakpoint: {
-                mode: 'explicit'
-              }
+              text: extractChatCompletionsUserContent(prompt)
             }
           ]
         });
       }
-
-      input.push({
-        type: 'message',
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: extractChatCompletionsUserContent(prompt)
-          }
-        ]
-      });
-
       return input;
     }
 
@@ -288,16 +283,150 @@
       }
     }
 
-    function applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus) {
+    function applyOpenAiPromptCacheConfig(requestBody, isGpt56Plus, cacheMode) {
       if (isGpt56Plus) {
         requestBody.prompt_cache_options = {
-          mode: 'explicit',
+          mode: cacheMode || 'explicit',
           ttl: OPENAI_PROMPT_CACHE_TTL
         };
         return;
       }
 
       requestBody.prompt_cache_retention = OPENAI_PROMPT_CACHE_RETENTION;
+    }
+
+    function finalizeTranslationResponse(json, apiMode, requestBody) {
+      const content = extractTranslationOutputText(json, apiMode);
+      if (!content) {
+        throw new Error(`${getApiModeDisplayName(apiMode)} response missing output text`);
+      }
+
+      recordOpenAiPromptCacheResult(json, apiMode, requestBody);
+      return content;
+    }
+
+    function recordOpenAiPromptCacheResult(json, apiMode, requestBody) {
+      if (!isOpenAiPromptCachePrewarmEnabled(apiMode)) return;
+
+      const cachedTokens = getOpenAiCachedTokens(json, apiMode);
+      if (cachedTokens === null) return;
+      const cacheScope = getOpenAiPromptCacheScope(apiMode, requestBody);
+
+      if (cachedTokens > 0) {
+        openAiPromptCacheMissCounts.delete(cacheScope);
+        return;
+      }
+
+      const missCount = (openAiPromptCacheMissCounts.get(cacheScope) || 0) + 1;
+      openAiPromptCacheMissCounts.set(cacheScope, missCount);
+      const threshold = getOpenAiPromptCachePrewarmMissThreshold();
+      if (
+        missCount < threshold ||
+        openAiPromptCachePrewarmPromise ||
+        !requestBody
+      ) {
+        return;
+      }
+
+      openAiPromptCachePrewarmPromise = prewarmOpenAiPromptCache(apiMode, requestBody)
+        .then(() => {
+          openAiPromptCacheMissCounts.delete(cacheScope);
+          console.info('[LocalBlockTranslator] OpenAI prompt cache prewarm completed; the next translation will verify cache reuse.');
+        })
+        .catch((error) => {
+          console.warn(
+            `[LocalBlockTranslator] OpenAI prompt cache prewarm failed: ${getErrorMessage(error)}`
+          );
+        })
+        .finally(() => {
+          openAiPromptCachePrewarmPromise = null;
+        });
+    }
+
+    function isOpenAiPromptCachePrewarmEnabled(apiMode) {
+      return (
+        CONFIG.promptCachePrewarmEnabled === true &&
+        (apiMode === 'chat_completions' ||
+          (apiMode === 'responses' && isGpt56OrLater(CONFIG.model)))
+      );
+    }
+
+    function getOpenAiPromptCacheScope(apiMode, requestBody) {
+      const inputItems =
+        apiMode === 'responses' ? requestBody?.input : requestBody?.messages;
+      const stableInstructions = JSON.stringify(
+        getInitialDeveloperMessages(inputItems).map((message) => message.content)
+      );
+      return [apiMode, requestBody?.model || '', requestBody?.prompt_cache_key || '', stableInstructions].join(
+        '\u0000'
+      );
+    }
+
+    function getOpenAiPromptCachePrewarmMissThreshold() {
+      const configured = Number(CONFIG.promptCachePrewarmMissThreshold);
+      return Number.isInteger(configured) && configured > 0 ? configured : 3;
+    }
+
+    function getOpenAiCachedTokens(json, apiMode) {
+      const details =
+        apiMode === 'responses'
+          ? json?.usage?.input_tokens_details
+          : json?.usage?.prompt_tokens_details;
+      const cachedTokens = Number(details?.cached_tokens);
+      return Number.isFinite(cachedTokens) && cachedTokens >= 0 ? cachedTokens : null;
+    }
+
+    async function prewarmOpenAiPromptCache(apiMode, requestBody) {
+      const prewarmBody = buildOpenAiPromptCachePrewarmRequest(apiMode, requestBody);
+      if (!prewarmBody) {
+        throw new Error('OpenAI prompt cache prewarm request could not be constructed.');
+      }
+
+      const controller = new AbortController();
+      const timeoutMs = getRequestTimeoutMs();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        await postTranslationRequest(buildTranslationEndpoint(apiMode), controller.signal, prewarmBody, { apiMode });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function buildOpenAiPromptCachePrewarmRequest(apiMode, requestBody) {
+      if (apiMode === 'responses') {
+        const developerMessages = getInitialDeveloperMessages(requestBody.input);
+        if (!developerMessages.length) return null;
+        return {
+          ...requestBody,
+          input: developerMessages,
+          prompt_cache_options: {
+            ...(requestBody.prompt_cache_options || {}),
+            mode: 'explicit',
+            prewarm: true
+          }
+        };
+      }
+
+      const developerMessages = getInitialDeveloperMessages(requestBody.messages);
+      if (!developerMessages.length) return null;
+
+      return {
+        ...requestBody,
+        messages: developerMessages,
+        max_completion_tokens: Math.min(
+          Math.max(1, Number(requestBody.max_completion_tokens) || 16),
+          16
+        )
+      };
+    }
+
+    function getInitialDeveloperMessages(items) {
+      const developerMessages = [];
+      for (const item of Array.isArray(items) ? items : []) {
+        if (item?.role !== 'developer') break;
+        developerMessages.push(item);
+      }
+      return developerMessages;
     }
 
     function isGpt56OrLater(model) {

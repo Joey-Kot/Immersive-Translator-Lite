@@ -59,6 +59,13 @@
       if (!Number.isInteger(normalized.maxRequestRetries) || normalized.maxRequestRetries < 0) {
         normalized.maxRequestRetries = CONSTANTS.DEFAULT_MAX_REQUEST_RETRIES;
       }
+      if (
+        !Number.isInteger(normalized.promptCachePrewarmMissThreshold) ||
+        normalized.promptCachePrewarmMissThreshold < 1
+      ) {
+        normalized.promptCachePrewarmMissThreshold =
+          CONSTANTS.DEFAULT_PROMPT_CACHE_PREWARM_MISS_THRESHOLD;
+      }
       if (!Number.isInteger(normalized.maxConcurrentRequests) || normalized.maxConcurrentRequests <= 0) {
         normalized.maxConcurrentRequests = CONSTANTS.DEFAULT_MAX_CONCURRENT_REQUESTS;
       }

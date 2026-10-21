@@ -212,6 +212,20 @@
                 </div>
               </label>
 
+              <label class="field switch-field" data-openai-only="true">
+                <span class="label">提示词缓存预热</span>
+                <span class="switch-wrap">
+                  <input id="promptCachePrewarmEnabled" type="checkbox" />
+                  <span class="switch"></span>
+                  <span class="switch-text">连续未命中达到阈值时自动预热</span>
+                </span>
+              </label>
+
+              <label class="field" data-openai-only="true">
+                <span class="label">缓存预热触发阈值</span>
+                <input id="promptCachePrewarmMissThreshold" type="number" step="1" min="1" />
+              </label>
+
               <label class="field full">
                 <span class="label">额外系统指令</span>
                 <textarea id="responseInstructions" rows="7"></textarea>

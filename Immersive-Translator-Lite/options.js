@@ -118,6 +118,8 @@ const I18N_TEXT = {
       maxSegmentsPerRequest: '单次请求最大分段数',
       maxRequestRetries: '最大请求重试次数',
       requestCacheEnabled: '请求缓存',
+      promptCachePrewarmEnabled: '提示词缓存预热',
+      promptCachePrewarmMissThreshold: '缓存预热触发阈值',
       requestCacheTimeoutHours: '请求缓存超时（小时）',
       cleanRequestCache: '清空请求缓存',
       outputFormat: '输出格式',
@@ -153,6 +155,7 @@ const I18N_TEXT = {
       multipleSelectionMode: '按住多选键可连续选择多个 DOM 块',
       multipleSelectionMergeRequest: '松开多选键后将已选块合并翻译请求',
       requestCacheEnabled: '开启请求结果缓存',
+      promptCachePrewarmEnabled: '连续未命中达到阈值时自动预热',
       googleCacheEnabled: '启用 Google System Instructions 缓存',
       deepSeekThinkingEnabled: '启用 DeepSeek thinking',
       qwenThinkingEnabled: '启用 Qwen thinking',
@@ -318,6 +321,8 @@ const I18N_TEXT = {
       maxSegmentsPerRequest: 'Max Segments Per Request',
       maxRequestRetries: 'Maximum Request Retries',
       requestCacheEnabled: 'Request Cache',
+      promptCachePrewarmEnabled: 'Prompt Cache Prewarm',
+      promptCachePrewarmMissThreshold: 'Cache Prewarm Miss Threshold',
       requestCacheTimeoutHours: 'Request Cache Timeout (hours)',
       cleanRequestCache: 'Clean Request Cache',
       outputFormat: 'Output Format',
@@ -353,6 +358,7 @@ const I18N_TEXT = {
       multipleSelectionMode: 'Hold a modifier key to select multiple DOM blocks',
       multipleSelectionMergeRequest: 'Merge selected blocks into one translation dispatch on key release',
       requestCacheEnabled: 'Enable request result cache',
+      promptCachePrewarmEnabled: 'Prewarm automatically after consecutive cache misses',
       googleCacheEnabled: 'Enable Google System Instructions cache',
       deepSeekThinkingEnabled: 'Enable DeepSeek thinking',
       qwenThinkingEnabled: 'Enable Qwen thinking',
@@ -515,6 +521,13 @@ function normalizeSettings(input) {
     result.translationConfig.maxRequestRetries < 0
   ) {
     result.translationConfig.maxRequestRetries = defaults.maxRequestRetries;
+  }
+  if (
+    !Number.isInteger(result.translationConfig.promptCachePrewarmMissThreshold) ||
+    result.translationConfig.promptCachePrewarmMissThreshold < 1
+  ) {
+    result.translationConfig.promptCachePrewarmMissThreshold =
+      defaults.promptCachePrewarmMissThreshold;
   }
 
   return result;
